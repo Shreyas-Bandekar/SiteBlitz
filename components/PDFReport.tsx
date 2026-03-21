@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 
 type Payload = {
   url: string;
@@ -11,7 +12,7 @@ type Payload = {
     topFixesFirst: Array<{ priority: string; fix: string; expectedImpact: string }>;
     businessImpactNarrative: string;
     actionPlan30Days: Array<{ week: string; focus: string; outcome: string }>;
-    source: "model" | "fallback";
+    source: "model";
   };
   detectedIndustry?: { category: string; confidence: number };
   competitors?: { topCompetitors: Array<{ name: string; overall: number }> } | null;
@@ -29,6 +30,7 @@ type Payload = {
 };
 
 export default function PDFReport({ payload }: { payload: Payload }) {
+  const [lastError, setLastError] = useState("");
   const formatInr = (value: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
 
@@ -71,7 +73,7 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       <ol>${payload.recommendations
         .map((r) => `<li>[${r.priority.toUpperCase()}] ${r.action} - ${r.rationale}</li>`)
         .join("")}</ol>
-      <h2>AI Insights (${payload.aiInsights?.source || "fallback"})</h2>
+      <h2>AI Insights (${payload.aiInsights?.source || "model"})</h2>
       <p>${payload.aiInsights?.businessImpactNarrative || "Business impact narrative not available."}</p>
       <ol>${payload.aiInsights?.topFixesFirst?.map((f) => `<li>[${f.priority.toUpperCase()}] ${f.fix} - ${f.expectedImpact}</li>`).join("") || "<li>Not available</li>"}</ol>
       <h3>30-Day Action Plan</h3>
@@ -109,7 +111,7 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       const content = htmlToPdfmake(html);
       const docDefinition = { content };
       const blob = await new Promise<Blob>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("PDF generation timed out")), 5000);
+        const timer = setTimeout(() => reject(new Error("PDF generation timed out")), 10000);
         pdfMake.createPdf(docDefinition).getBlob((pdfBlob: Blob) => {
           clearTimeout(timer);
           resolve(pdfBlob);
@@ -123,18 +125,25 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       a.click();
       a.remove();
       URL.revokeObjectURL(blobUrl);
-    } catch {
+      setLastError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "PDF export failed";
+      console.error("[pdf-export:error]", message, error);
+      setLastError(message);
       downloadTextFallback(generatedAt);
     }
   };
 
   return (
-    <button
-      type="button"
-      onClick={exportPdf}
-      className="rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
-    >
-      Export PDF Report
-    </button>
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={exportPdf}
+        className="rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+      >
+        Export PDF Report
+      </button>
+      {lastError ? <p className="text-xs text-amber-200">PDF export issue: {lastError}. Downloaded text fallback.</p> : null}
+    </div>
   );
 }

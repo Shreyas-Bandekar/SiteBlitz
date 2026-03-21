@@ -90,7 +90,42 @@ export type AiInsights = {
   topFixesFirst: Array<{ priority: Severity; fix: string; reason: string; expectedImpact: string }>;
   businessImpactNarrative: string;
   actionPlan30Days: Array<{ week: string; focus: string; outcome: string }>;
-  source: "model" | "fallback";
+  source: "model";
+};
+
+export type LiveCompetitorAudit = {
+  url: string;
+  score: number;
+  timestamp: string;
+};
+
+export type AnalyticsSignal = {
+  value: string | number | null;
+  confidence: number;
+  evidence: string[];
+};
+
+export type LiveAnalytics = {
+  ga4Id: AnalyticsSignal;
+  monthlyUsers: AnalyticsSignal;
+  avgOrderValue: AnalyticsSignal;
+  conversionRate: AnalyticsSignal;
+};
+
+export type LiveAuditHistory = {
+  id: string;
+  url: string;
+  scores: DeterministicScores;
+  timestamp: string;
+};
+
+export type StageTraceEntry = {
+  stage: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  status: "ok" | "failed";
+  error?: string;
 };
 
 export type AuditReport = {
@@ -99,16 +134,25 @@ export type AuditReport = {
   issues: Issue[];
   recommendations: Recommendation[];
   detectedIndustry: IndustryDetection;
-  competitors: CompetitorComparison | null;
-  roi?: ROIResult;
+  competitors: LiveCompetitorAudit[];
+  roi: ROIResult | null;
+  roiReason?: string;
+  analytics: LiveAnalytics;
   contentFixes: ContentFix[];
   trends: Array<{ date: string; overall: number }>;
   trendsSummary: TrendsSummary;
-  aiInsights: AiInsights;
+  aiInsights?: AiInsights;
   disclaimers: string[];
-  summary: string;
+  summary?: string;
   deterministicNotes: string[];
   pipeline: string[];
+  isLive: true;
+  status: "live-complete";
+  liveTimestamp: string;
+  auditId: string;
+  history: LiveAuditHistory[];
+  stageTrace?: StageTraceEntry[];
+  rawHtml?: string;
   screenshot?: string;
   screenshots?: { desktop?: string; mobile?: string };
   seoDetails?: {

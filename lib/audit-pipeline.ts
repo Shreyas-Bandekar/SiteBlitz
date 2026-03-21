@@ -3,30 +3,20 @@ import AxeBuilder from "@axe-core/playwright";
 import * as cheerio from "cheerio";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { env } from "./env";
-import { log } from "./logger";
 import { generateContentSuggestions } from "./audit-engine";
 import { generateAiInsights } from "./ai-insights";
-import { getSameIndustryCompetitors } from "./benchmarks";
 import { detectIndustry } from "./industry";
-import { calculateEnterpriseRoi } from "./roi";
 import { computeTrendsSummary } from "./trends";
-import {
-  computeScores,
-  getCachedReport,
-  getCachedScore,
-  isRetest,
-  makeScoreCacheKey,
-  prioritizeRecommendations,
-  setCachedReport,
-  setCachedScore,
-} from "./scoring";
-import type { AuditReport, Issue } from "./audit-types";
+import { computeScores, prioritizeRecommendations } from "./scoring";
+import type { AuditReport, Issue, StageTraceEntry } from "./audit-types";
 
 const execFileAsync = promisify(execFile);
-const PLAYWRIGHT_TIMEOUT_MS = 12000;
-const SCREENSHOT_TIMEOUT_MS = 12000;
-const LIGHTHOUSE_TIMEOUT_MS = 30000;
+const PLAYWRIGHT_DESKTOP_TIMEOUT_MS = 15000;
+const AXE_TIMEOUT_MS = 10000;
+const MOBILE_TIMEOUT_MS = 12000;
+const SCREENSHOT_TIMEOUT_MS = 18000;
+const LIGHTHOUSE_TIMEOUT_MS = 25000;
+const HTML_FETCH_TIMEOUT_MS = 10000;
 
 function normalizeUrl(input: string) {
   const trimmed = input.trim();
@@ -40,135 +30,147 @@ function failIssue(category: Issue["category"], title: string, detail: string, s
 
 export async function runAuditPipeline(
   rawUrl: string,
-  options: { roiEnabled?: boolean; roiTemplate?: "ecommerce" | "saas" | "local_service" | "custom" } = {}
-): Promise<AuditReport> {
+  options: { includeAi?: boolean } = {}
+): Promise<Omit<AuditReport, "competitors" | "analytics" | "roi" | "roiReason" | "isLive" | "status" | "liveTimestamp" | "auditId" | "history">> {
   const url = normalizeUrl(rawUrl);
-  if (!url) throw new Error("URL is required.");
+  if (!url) throw new Error("Invalid URL.");
+
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error("Invalid URL format.");
+    throw new Error("Invalid URL.");
   }
-  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Only http/https URLs are supported.");
-  const cachedReport = getCachedReport(url);
-  if (cachedReport) {
-    return { ...cachedReport, pipeline: [...cachedReport.pipeline, "cached-result"] };
-  }
+  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Invalid URL.");
 
   const pipeline: string[] = ["validate-url"];
+  const stageTrace: StageTraceEntry[] = [];
   const issues: Issue[] = [];
-
-  log("info", "Starting audit pipeline", { url });
 
   let desktopHtml = "";
   let mobileHtml = "";
   let mobileTapTargets = 0;
-  let axeViolations = -1;
-  let screenshot: string | undefined;
-  let screenshots: { desktop?: string; mobile?: string } | undefined;
+  let playwrightFailed = false;
+  let lighthouseFailed = false;
 
-  const retest = isRetest(url);
-  let playwrightOk = false;
-  const playwrightStage = retest
-    ? Promise.resolve()
-    : withTimeout(async () => {
+  const [playwrightResult, screenshotResult, lighthouseResult] = await Promise.allSettled([
+    runStageTrace(stageTrace, "playwright", async () =>
+      withTimeout(async () => {
       const browser = await chromium.launch({ headless: true });
       try {
         pipeline.push("playwright-desktop");
         const page = await browser.newPage();
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: PLAYWRIGHT_TIMEOUT_MS });
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: PLAYWRIGHT_DESKTOP_TIMEOUT_MS });
         desktopHtml = await page.content();
 
         pipeline.push("axe-accessibility");
-        try {
-          const axe = await new AxeBuilder({ page }).analyze();
-          axeViolations = axe.violations.length;
-          if (axeViolations > 0) {
-            issues.push(
-              failIssue(
-                "accessibility",
-                "Accessibility violations detected",
-                `axe-core reported ${axeViolations} violation group(s).`,
-                axeViolations > 10 ? "high" : axeViolations > 3 ? "medium" : "low"
-              )
-            );
-          }
-        } catch (error) {
-          issues.push(failIssue("accessibility", "axe-core scan unavailable", "Accessibility scan failed; using Lighthouse accessibility as fallback baseline.", "low"));
-          log("warn", "Axe stage failed", { message: error instanceof Error ? error.message : "unknown" });
+        const axe = await withTimeout(async () => await new AxeBuilder({ page }).analyze(), AXE_TIMEOUT_MS, "axe");
+        const axeViolations = axe.violations.length;
+        if (axeViolations > 0) {
+          issues.push(
+            failIssue(
+              "accessibility",
+              "Accessibility violations detected",
+              `axe-core reported ${axeViolations} violation group(s).`,
+              axeViolations > 10 ? "high" : axeViolations > 3 ? "medium" : "low"
+            )
+          );
         }
 
         pipeline.push("playwright-mobile");
         const mobileCtx = await browser.newContext({ ...devices["iPhone 13"] });
         const mobilePage = await mobileCtx.newPage();
-        await mobilePage.goto(url, { waitUntil: "domcontentloaded", timeout: PLAYWRIGHT_TIMEOUT_MS });
+        await mobilePage.goto(url, { waitUntil: "domcontentloaded", timeout: MOBILE_TIMEOUT_MS });
         mobileHtml = await mobilePage.content();
         mobileTapTargets = await mobilePage.locator("a,button,input[type='button'],input[type='submit']").count();
         await mobileCtx.close();
-        playwrightOk = true;
       } finally {
         await browser.close();
       }
-    }, PLAYWRIGHT_TIMEOUT_MS, "playwright");
-
-  const screenshotStage = retest
-    ? Promise.resolve(undefined)
-    : withTimeout(async () => {
-        pipeline.push("puppeteer-screenshot");
-        return await captureScreenshots(url);
-      }, SCREENSHOT_TIMEOUT_MS, "puppeteer");
-
-  let lighthousePerformance = 0;
-  let lighthouseSeo = 0;
-  let lighthouseAccessibility = 0;
-  const lighthouseStage = withTimeout(async () => {
-    pipeline.push("lighthouse");
-    const perfCache = getCachedScore(makeScoreCacheKey(url, "lighthouse:performance"));
-    const seoCache = getCachedScore(makeScoreCacheKey(url, "lighthouse:seo"));
-    const accessCache = getCachedScore(makeScoreCacheKey(url, "lighthouse:accessibility"));
-    if (perfCache !== null && seoCache !== null && accessCache !== null) {
-      return { performance: perfCache, seo: seoCache, accessibility: accessCache };
-    }
-    const lighthouseData = await runLighthouseCli(url);
-    const performance = Math.round((lighthouseData?.categories?.performance?.score ?? 0) * 100);
-    const seo = Math.round((lighthouseData?.categories?.seo?.score ?? 0) * 100);
-    const accessibility = Math.round((lighthouseData?.categories?.accessibility?.score ?? 0) * 100);
-    setCachedScore(makeScoreCacheKey(url, "lighthouse:performance"), performance);
-    setCachedScore(makeScoreCacheKey(url, "lighthouse:seo"), seo);
-    setCachedScore(makeScoreCacheKey(url, "lighthouse:accessibility"), accessibility);
-    return { performance, seo, accessibility };
-  }, LIGHTHOUSE_TIMEOUT_MS, "lighthouse");
-
-  const [playwrightResult, screenshotResult, lighthouseResult] = await Promise.allSettled([
-    playwrightStage,
-    screenshotStage,
-    lighthouseStage,
+    }, PLAYWRIGHT_DESKTOP_TIMEOUT_MS + AXE_TIMEOUT_MS + MOBILE_TIMEOUT_MS, "playwright")
+    ),
+    runStageTrace(stageTrace, "screenshot", async () => withTimeout(async () => {
+      pipeline.push("puppeteer-screenshot");
+      return await captureScreenshots(url);
+    }, SCREENSHOT_TIMEOUT_MS, "screenshot")),
+    runStageTrace(stageTrace, "lighthouse", async () => withTimeout(async () => {
+      pipeline.push("lighthouse");
+      return await runLighthouseCli(url);
+    }, LIGHTHOUSE_TIMEOUT_MS, "lighthouse")),
   ]);
 
   if (playwrightResult.status === "rejected") {
-    issues.push(failIssue("uiux", "Rendered checks unavailable", "Playwright stage failed; report generated with available checks only.", "medium"));
-    log("warn", "Playwright stage failed", { message: playwrightResult.reason instanceof Error ? playwrightResult.reason.message : "unknown" });
-  }
-  if (screenshotResult.status === "fulfilled") {
-    screenshots = screenshotResult.value;
-    screenshot = screenshotResult.value?.desktop;
-  } else if (!retest) {
-    issues.push(failIssue("uiux", "Screenshot capture skipped", "Puppeteer screenshot timed out or target blocked rendering.", "low"));
-    log("warn", "Puppeteer screenshot failed", { message: screenshotResult.reason instanceof Error ? screenshotResult.reason.message : "unknown" });
-  }
-  if (lighthouseResult.status === "fulfilled") {
-    lighthousePerformance = lighthouseResult.value.performance;
-    lighthouseSeo = lighthouseResult.value.seo;
-    lighthouseAccessibility = lighthouseResult.value.accessibility;
-  } else {
-    issues.push(failIssue("performance", "Lighthouse unavailable", "Performance/SEO baseline unavailable; fallback scoring applied.", "medium"));
-    log("warn", "Lighthouse stage failed", { message: lighthouseResult.reason instanceof Error ? lighthouseResult.reason.message : "unknown" });
+    playwrightFailed = true;
+    issues.push(
+      failIssue(
+        "uiux",
+        "Playwright rendered scan failed",
+        "Rendered browser scan failed; attempting live HTML fallback extraction.",
+        "medium"
+      )
+    );
+
+    const htmlFallback = await runStageTrace(stageTrace, "http-html", async () =>
+      await withTimeout(async () => {
+        const res = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; SiteBlitzLiveAudit/1.0)",
+            Accept: "text/html,application/xhtml+xml",
+          },
+        });
+        if (!res.ok) throw new Error(`http-html returned ${res.status}`);
+        return await res.text();
+      }, HTML_FETCH_TIMEOUT_MS, "http-html")
+    ).catch((error) => {
+      throw withTrace(error, stageTrace);
+    });
+
+    desktopHtml = htmlFallback;
+    mobileHtml = htmlFallback;
+    mobileTapTargets = 0;
   }
 
-  if (!playwrightOk && lighthousePerformance === 0 && lighthouseSeo === 0 && lighthouseAccessibility === 0) {
-    throw new Error("Target unreachable or blocked, and scan timed out across all stages.");
+  if (screenshotResult.status === "rejected") {
+    issues.push(
+      failIssue(
+        "uiux",
+        "Screenshot capture failed",
+        "Puppeteer screenshot failed; continuing without screenshots.",
+        "low"
+      )
+    );
   }
+
+  if (lighthouseResult.status === "rejected") {
+    lighthouseFailed = true;
+    issues.push(
+      failIssue(
+        "performance",
+        "Lighthouse scan failed",
+        "Lighthouse metrics unavailable for this run; performance/SEO/accessibility may be conservative.",
+        "medium"
+      )
+    );
+  }
+
+  if (!desktopHtml && lighthouseFailed) {
+    throw withTrace(new Error("No usable live data: rendered scan and Lighthouse both failed."), stageTrace);
+  }
+
+  const screenshots = screenshotResult.status === "fulfilled" ? screenshotResult.value : undefined;
+  const screenshot = screenshots?.desktop;
+
+  const lighthousePerformance = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.performance?.score : 0) ?? 0) * 100
+  );
+  const lighthouseSeo = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.seo?.score : 0) ?? 0) * 100
+  );
+  const lighthouseAccessibility = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.accessibility?.score : 0) ?? 0) * 100
+  );
 
   const $ = cheerio.load(desktopHtml || "<html></html>");
   const m$ = cheerio.load(mobileHtml || desktopHtml || "<html></html>");
@@ -182,25 +184,22 @@ export async function runAuditPipeline(
   const imgCount = $("img").length;
   const altCount = $("img[alt]").length;
   const wordCount = $("body").text().replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length;
-  const ctaCount = $("a,button,input[type='submit']").filter((_, el) => {
-    const text = $(el).text().toLowerCase().trim();
-    const value = ($(el).attr("value") || "").toLowerCase();
-    return /(book|demo|start|get|contact|free|trial|audit)/.test(`${text} ${value}`);
-  }).length;
-  const mobileTapTargetsOk = playwrightOk ? mobileTapTargets >= 3 : false;
+  const ctaCount = $("a,button,input[type='submit']")
+    .filter((_, el) => {
+      const text = $(el).text().toLowerCase().trim();
+      const value = ($(el).attr("value") || "").toLowerCase();
+      return /(book|demo|start|get|contact|free|trial|audit)/.test(`${text} ${value}`);
+    })
+    .length;
+  const mobileTapTargetsOk = !playwrightFailed && mobileTapTargets >= 3;
 
   if (!titlePresent) issues.push(failIssue("seo", "Missing title tag", "Add a unique title to improve search snippets.", "high"));
-  if (!metaDescriptionPresent) {
-    issues.push(failIssue("seo", "Missing meta description", "Add a description for stronger CTR in search results.", "medium"));
-  }
+  if (!metaDescriptionPresent) issues.push(failIssue("seo", "Missing meta description", "Add a description for stronger CTR in search results.", "medium"));
   if (h1Count !== 1) issues.push(failIssue("uiux", "Heading hierarchy issue", "Use exactly one H1 and structured H2/H3 sections.", "medium"));
-  if (!hasViewport) issues.push(failIssue("mobile", "Missing viewport meta", "Add a viewport meta tag for mobile layout.", "high"));
+  if (!hasViewport) issues.push(failIssue("mobile", "Missing viewport meta", "Add viewport meta for mobile layout.", "high"));
   if (!mobileTapTargetsOk) issues.push(failIssue("mobile", "Low mobile tap target coverage", "Increase tappable controls for mobile UX.", "medium"));
   if (formCount === 0) issues.push(failIssue("leadConversion", "No lead form detected", "Add a lead form near primary CTA.", "high"));
-  if (ctaCount === 0) issues.push(failIssue("leadConversion", "No clear CTA text", "Add action-oriented CTAs like Start Free Trial.", "high"));
-  if (lighthousePerformance > 0 && lighthousePerformance < 60) {
-    issues.push(failIssue("performance", "Low Lighthouse performance score", "Optimize LCP, JS execution, and image sizes.", "high"));
-  }
+  if (ctaCount === 0) issues.push(failIssue("leadConversion", "No clear CTA text", "Add action-oriented CTAs.", "high"));
 
   const scores = computeScores({
     lighthousePerformance,
@@ -222,98 +221,103 @@ export async function runAuditPipeline(
 
   pipeline.push("report-assembly");
   const detectedIndustry = detectIndustry(desktopHtml || mobileHtml);
-  const competitors = getSameIndustryCompetitors({
-    industry: detectedIndustry.category,
-    yourScores: scores,
-    confidence: detectedIndustry.confidence,
-  });
-  const roi = calculateEnterpriseRoi({
-    enabled: options.roiEnabled ?? true,
-    confidence: detectedIndustry.confidence,
-    template: options.roiTemplate ?? (detectedIndustry.category === "ecommerce"
-      ? "ecommerce"
-      : detectedIndustry.category === "saas"
-        ? "saas"
-        : detectedIndustry.category === "local_service"
-          ? "local_service"
-          : "custom"),
-    traffic: 10000,
-    score: scores.overall,
-  });
   const contentFixes = generateContentSuggestions(desktopHtml || mobileHtml, detectedIndustry.category, detectedIndustry.confidence);
   const trends = [{ date: new Date().toISOString(), overall: scores.overall }];
   const trendsSummary = computeTrendsSummary(trends);
-  const seoDetails = {
-    titleLength: titleText.length,
-    metaLength: metaText.length,
-    h1Count,
-    wordCount,
-    altMissing: Math.max(0, imgCount - altCount),
-  };
-  const serpPreview = {
-    title: titleText || "Homepage",
-    description: metaText || "Website audit preview unavailable. Add a meta description for better search snippets.",
-    url,
-  };
-  const disclaimers = [
-    "Deterministic scores are measured from Lighthouse, Playwright, axe-core, and DOM parsing.",
-    "Industry classification and content guidance are estimated from page signals.",
-  ];
-  if (detectedIndustry.confidence < 75) {
-    disclaimers.push("Industry confidence is below threshold; competitor and ROI outputs are intentionally hidden.");
-  }
-  if (options.roiEnabled === false) {
-    disclaimers.push("ROI is disabled by user preference for this audit run.");
-  }
-  setCachedScore(makeScoreCacheKey(url, "overall"), scores.overall);
 
-  const deterministicNotes = [
-    "All scores are deterministic from Lighthouse, axe-core, Playwright checks, and DOM parsing.",
-    "AI insights are generated locally with Ollama when available and fall back deterministically when unavailable.",
-    "Lighthouse metrics are cached for 24 hours to speed up repeat audits.",
-  ];
-  const aiInsights = await generateAiInsights({
-    url,
-    overall: scores.overall,
-    recommendations,
-    issueCount: issues.length,
-  });
-  const summary = aiInsights.executiveSummary;
-  pipeline.push(aiInsights.source === "model" ? "ai:model" : "ai:fallback");
+  let aiInsights;
+  if (options.includeAi !== false) {
+    try {
+      aiInsights = await runStageTrace(stageTrace, "ai", async () => await generateAiInsights({
+          url,
+          overall: scores.overall,
+          recommendations,
+          issueCount: issues.length,
+        })
+      );
+    } catch (error) {
+      throw withTrace(error, stageTrace);
+    }
+    pipeline.push("ai:model");
+  }
+
   pipeline.push("summary");
 
-  const report: AuditReport = {
+  return {
     url,
     scores,
     issues,
     recommendations,
     detectedIndustry,
-    competitors: detectedIndustry.confidence >= 75 ? competitors : null,
-    roi,
     contentFixes,
     trends,
     trendsSummary,
     aiInsights,
-    disclaimers,
-    summary,
-    deterministicNotes,
+    disclaimers: ["Live-only mode: all values come from real-time scans."],
+    summary: aiInsights?.executiveSummary || "AI summary unavailable",
+    deterministicNotes: ["Scores are deterministic from live tooling outputs."],
     pipeline,
     screenshot,
     screenshots,
-    seoDetails,
-    serpPreview,
+    seoDetails: {
+      titleLength: titleText.length,
+      metaLength: metaText.length,
+      h1Count,
+      wordCount,
+      altMissing: Math.max(0, imgCount - altCount),
+    },
+    serpPreview: {
+      title: titleText || "Homepage",
+      description: metaText || "",
+      url,
+    },
+    rawHtml: desktopHtml || mobileHtml,
+    stageTrace,
   };
-  setCachedReport(url, report);
-  return report;
+}
+
+function withTrace(error: unknown, stageTrace: StageTraceEntry[]) {
+  const wrapped = error instanceof Error ? error : new Error(String(error));
+  (wrapped as Error & { stageTrace?: StageTraceEntry[] }).stageTrace = [...stageTrace];
+  return wrapped;
 }
 
 async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number, stage: string): Promise<T> {
   return await Promise.race([
     fn(),
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new Error(`${stage} timed out after ${timeoutMs}ms`)), timeoutMs);
-    }),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${stage} timed out after ${timeoutMs}ms`)), timeoutMs)),
   ]);
+}
+
+async function runStageTrace<T>(trace: StageTraceEntry[], stage: string, fn: () => Promise<T>): Promise<T> {
+  const started = Date.now();
+  const startedAt = new Date(started).toISOString();
+  console.log("[pipeline:stage:start]", JSON.stringify({ stage, startedAt }));
+  try {
+    const result = await fn();
+    const ended = Date.now();
+    trace.push({
+      stage,
+      startedAt,
+      endedAt: new Date(ended).toISOString(),
+      durationMs: ended - started,
+      status: "ok",
+    });
+    console.log("[pipeline:stage:end]", JSON.stringify({ stage, status: "ok", durationMs: ended - started }));
+    return result;
+  } catch (error) {
+    const ended = Date.now();
+    trace.push({
+      stage,
+      startedAt,
+      endedAt: new Date(ended).toISOString(),
+      durationMs: ended - started,
+      status: "failed",
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    console.log("[pipeline:stage:end]", JSON.stringify({ stage, status: "failed", durationMs: ended - started, error: error instanceof Error ? error.message : "unknown" }));
+    throw error;
+  }
 }
 
 async function runLighthouseCli(url: string) {
@@ -330,34 +334,48 @@ async function runLighthouseCli(url: string) {
       `--chrome-path=${chromePath}`,
       "--chrome-flags=--headless --no-sandbox --disable-gpu --disable-dev-shm-usage",
     ],
-    {
-      maxBuffer: 20 * 1024 * 1024,
-      timeout: 45000,
-      env: process.env,
-    }
+    { maxBuffer: 20 * 1024 * 1024, timeout: 60000, env: process.env }
   );
 
   const trimmed = stdout.trim();
   const start = trimmed.indexOf("{");
-  if (start < 0) throw new Error("Lighthouse output missing JSON payload.");
-  const parsed = JSON.parse(trimmed.slice(start)) as { categories?: Record<string, { score: number }> };
-  return parsed;
+  if (start < 0) throw new Error("lighthouse stage failed: output missing JSON payload");
+  return JSON.parse(trimmed.slice(start)) as { categories?: Record<string, { score: number }> };
 }
 
 async function captureScreenshots(url: string) {
+  const start = Date.now();
+  console.log("[screenshot:start]", JSON.stringify({ url, timeoutMs: SCREENSHOT_TIMEOUT_MS }));
   const puppeteer = await import("puppeteer");
   const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-gpu"] });
   try {
+    let desktop: string | undefined;
+    let mobile: string | undefined;
+
     const desktopPage = await browser.newPage();
     await desktopPage.setViewport({ width: 1440, height: 2000 });
-    await desktopPage.goto(url, { waitUntil: "networkidle2", timeout: SCREENSHOT_TIMEOUT_MS });
-    const desktop = ((await desktopPage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
+    try {
+      await desktopPage.goto(url, { waitUntil: "networkidle2", timeout: SCREENSHOT_TIMEOUT_MS });
+      const raw = ((await desktopPage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
+      desktop = `data:image/png;base64,${raw}`;
+    } catch (error) {
+      console.log("[screenshot:desktop:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
+    }
 
     const mobilePage = await browser.newPage();
     await mobilePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-    await mobilePage.goto(url, { waitUntil: "networkidle2", timeout: SCREENSHOT_TIMEOUT_MS });
-    const mobile = ((await mobilePage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
+    try {
+      await mobilePage.goto(url, { waitUntil: "networkidle2", timeout: SCREENSHOT_TIMEOUT_MS });
+      const raw = ((await mobilePage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
+      mobile = `data:image/png;base64,${raw}`;
+    } catch (error) {
+      console.log("[screenshot:mobile:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
+    }
 
+    if (!desktop && !mobile) {
+      throw new Error("screenshot stage failed: both desktop and mobile captures failed");
+    }
+    console.log("[screenshot:end]", JSON.stringify({ url, durationMs: Date.now() - start, desktop: Boolean(desktop), mobile: Boolean(mobile) }));
     return { desktop, mobile };
   } finally {
     await browser.close();

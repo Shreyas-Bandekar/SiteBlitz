@@ -1,4 +1,5 @@
 import type { ROIResult } from "./audit-types";
+import type { DeterministicScores, LiveAnalytics } from "./audit-types";
 
 type RoiTemplate = "ecommerce" | "saas" | "local_service" | "custom";
 type RoiInput = {
@@ -44,4 +45,54 @@ export function calculateEnterpriseRoi(input: RoiInput): ROIResult | undefined {
     upliftPercent,
     template,
   };
+}
+
+export function calculateRealROI(scores: DeterministicScores, analytics: LiveAnalytics): { roi: ROIResult | null; reason?: string } {
+  const monthlyUsers = toPositiveNumber(analytics.monthlyUsers.value);
+  const avgOrderValue = toPositiveNumber(analytics.avgOrderValue.value);
+  const conversionRate = toPositiveNumber(analytics.conversionRate.value);
+
+  const missing: string[] = [];
+  if (!monthlyUsers) missing.push("monthlyUsers");
+  if (!avgOrderValue) missing.push("avgOrderValue");
+  if (!conversionRate) missing.push("conversionRate");
+  if (missing.length) {
+    return { roi: null, reason: `Insufficient public analytics signals (${missing.join(", ")}).` };
+  }
+
+  const users = monthlyUsers as number;
+  const aov = avgOrderValue as number;
+  const conv = conversionRate as number;
+
+  const scoreGap = Math.max(0, 100 - Math.min(100, scores.overall));
+  const improvementFactor = Number((1 + (scoreGap / 100) * 0.2).toFixed(4));
+  const projectedConversionRate = conv * improvementFactor;
+
+  const currentRevenue = Math.round(users * conv * aov);
+  const projectedRevenue = Math.round(users * projectedConversionRate * aov);
+  const monthlyUplift = projectedRevenue - currentRevenue;
+  const upliftPercent = currentRevenue > 0 ? Math.round((monthlyUplift / currentRevenue) * 100) : 0;
+
+  return {
+    roi: {
+      traffic: users,
+      conversionRate: conv,
+      avgOrderValue: aov,
+      currency: "INR",
+      currentRevenue,
+      projectedRevenue,
+      monthlyUplift,
+      upliftPercent,
+      template: "custom",
+    },
+  };
+}
+
+function toPositiveNumber(value: string | number | null): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const n = Number(value.replace(/,/g, "").trim());
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
 }

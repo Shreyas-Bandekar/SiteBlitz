@@ -68,6 +68,15 @@ body {
   animation: pop 800ms ease forwards;
 }
 
+.hero-gradient {
+  background: linear-gradient(135deg, #1e1b4b 0%, #3b82f6 50%, #ec4899 100%);
+}
+
+.live-header {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 @keyframes pop {
   0% {
     transform: scale(0.7);

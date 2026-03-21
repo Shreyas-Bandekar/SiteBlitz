@@ -1,5 +1,11 @@
 "use client";
 
+function toImageSrc(input?: string) {
+  if (!input) return "";
+  if (input.startsWith("data:image")) return input;
+  return `data:image/png;base64,${input}`;
+}
+
 function Frame({
   title,
   screenshot,
@@ -18,7 +24,7 @@ function Frame({
         <div className={`rounded-2xl border-2 border-slate-300/50 bg-slate-900 p-2 shadow-2xl ${mobile ? "rounded-[2rem]" : ""}`}>
           {screenshot ? (
             <img
-              src={`data:image/png;base64,${screenshot}`}
+              src={toImageSrc(screenshot)}
               alt={alt}
               className={`w-full rounded-xl object-cover ${mobile ? "max-h-[500px]" : "max-h-[420px]"}`}
             />

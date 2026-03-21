@@ -1,109 +1,49 @@
-# AI Website Audit Platform (Hackathon MVP)
+# SiteBlitz - Live Website Auditor
 
-Implement with zero paid services. Use only open-source tools and free tiers. Do not require any paid API keys. Prefer local LLM via Ollama or rule-based recommendation generation.
+SiteBlitz is a production-style Next.js app with:
+- Premium marketing landing page at `/`
+- Strict live audit app at `/audit`
+- Live-only API flow at `/api/audit`
 
-## Gap analysis (before -> after)
-
-| Requirement | Previous state | Implemented fix |
-|---|---|---|
-| Live URL audit | Heuristic-only endpoint | Real pipeline with Playwright + Lighthouse + axe + Cheerio |
-| Category scoring | Mock-like mixed signals | Deterministic rubric in `lib/scoring.ts` |
-| Structured report | Basic scores/issues/fixes | `scores + issues + prioritized recommendations + summary + notes + pipeline` |
-| Real tooling | Missing Lighthouse/Playwright/axe integration | Added full open-source stack, no paid APIs |
-| AI summarization | None | Optional local Ollama summary, automatic rule-based fallback |
-| Progress and errors | Animated loading only | Returns executed pipeline steps and elapsed time, API failure details |
-| Env validation/logs | Minimal | Zod env validation + structured logger |
-| Tests | None | Added tests for scoring + report recommendation mapping |
-
-## Problem mapping
-
-- Teams need quick, explainable website quality audits during demos.
-- Judges expect concrete evidence, not black-box numbers.
-- This project combines rendered checks, Lighthouse baselines, and deterministic scoring.
+No sample report buttons, no cached mode, no runtime AI fallback templates.
 
 ## Architecture
 
-- **Frontend**: Next.js App Router page for input, progress, and report rendering.
-- **API route**: `app/api/audit/route.ts` orchestrates the audit pipeline and error handling.
-- **Pipeline**: `lib/audit-pipeline.ts`
-  - Playwright desktop render
-  - Playwright mobile render and tap-target checks
-  - axe-core accessibility scan
-  - Lighthouse (`performance`, `seo`, `accessibility`)
-  - Cheerio DOM parsing (title/meta/H1/forms/CTA)
-- **Scoring**: `lib/scoring.ts` deterministic, transparent, bounded (0-100).
-- **Summary**:
-  - Primary: local Ollama (`OLLAMA_HOST`, `OLLAMA_MODEL`)
-  - Fallback: deterministic rule-based summary
+- `app/(marketing)/page.tsx`: SaaS landing page with hero, features, and live CTA.
+- `app/(audit)/audit/page.tsx`: live scanner UI and results view.
+- `app/api/audit/route.ts`: live endpoint.
+- `lib/audit-pipeline.ts`: Playwright + axe-core + Lighthouse + DOM parsing.
+- `lib/live-analytics.ts`: extracts analytics signals from live page HTML.
+- `lib/live-database.ts`: persists audits to Vercel Postgres.
+- `lib/roi.ts`: computes ROI only from real extracted analytics values.
 
-## Scoring rubric
+## Live API Flow
 
-- UI/UX: heading clarity + CTA/form presence
-- SEO: Lighthouse SEO baseline + title/meta/H1 checks
-- Mobile usability: viewport + mobile tap target coverage
-- Performance: Lighthouse performance score
-- Accessibility: Lighthouse accessibility + axe violations surfaced in issues
-- Lead conversion: form + CTA signal strength
-- Overall: weighted aggregate from deterministic category scores
-- One-page judging rubric: `docs/SCORING_RUBRIC.md`
+1. Validate URL.
+2. Run live site audit pipeline.
+3. Detect industry from live HTML.
+4. Run 3 live competitor audits.
+5. Extract live analytics signals.
+6. Compute ROI from extracted analytics or return `roi: null` with reason.
+7. Save audit to Postgres.
+8. Return live report payload.
 
-## Run instructions
+## Environment
 
-1. Install deps:
-   - `npm install`
-2. (Optional) run local Ollama:
-   - Start Ollama locally
-   - Optionally set `.env.local`:
-     - `OLLAMA_HOST=http://127.0.0.1:11434`
-     - `OLLAMA_MODEL=llama3.1:8b`
-3. Start app:
-   - `npm run dev`
-4. Tests:
-   - `npm run test`
-5. Build:
-   - `npm run build`
+Create `.env` (or `.env.local`) with:
 
-## Deployment (free-tier guidance)
+- `OLLAMA_HOST=http://127.0.0.1:11434`
+- `OLLAMA_MODEL=qwen2.5:3b-instruct` (or any installed model)
+- `POSTGRES_URL=...` (from Vercel Postgres)
 
-- Frontend/API: Vercel free tier
-- If headless audits are slow on hosted serverless, run backend locally for demo day
-- No DB required for MVP (report returned directly in response)
-- Offline demo safety: use **Load Cached Sample Report** button on the homepage
+## Commands
 
-## Benchmark demo URLs
+- `npm install`
+- `npm run dev`
+- `npm run build`
+- `npm run test`
 
-- Good (modern): `https://web.dev`
-- Average SMB style: `https://python.org`
-- Weak/older: `http://info.cern.ch`
-- Captured benchmark outputs: `reports/benchmark-results.md`
+## Notes
 
-## Final submission package
-
-- README with coverage matrix: this file
-- Architecture diagram: `docs/ARCHITECTURE_DIAGRAM.md`
-- Sample report JSON: `reports/sample-report.json`
-- Human-readable report: `reports/sample-report.md`
-- 3-minute demo script: `docs/DEMO_SCRIPT_3_MIN.md`
-- Video walkthrough: record from script above (screen + narration)
-
-## Limitations / future scope
-
-- Some websites block headless browsers or bot traffic.
-- Lighthouse in serverless environments can be resource-constrained.
-- Current progress UI is request-level, not streamed per pipeline step.
-- Add queueing, caching, retry policies, and persisted report history for scale.
-
-## Requirement coverage matrix
-
-| Requirement | Status |
-|---|---|
-| Accept live URL and run automated analysis | ✅ |
-| Analyze UI/UX, SEO, mobile, performance, accessibility, lead conversion | ✅ |
-| Structured report with category scores/issues/prioritized recommendations/summary | ✅ |
-| Use real tooling (Lighthouse, Playwright, axe-core, DOM parsing) | ✅ |
-| AI summarization with deterministic scoring separation | ✅ (Ollama optional, rule-based fallback) |
-| Frontend progress + report preview + graceful errors | ✅ |
-| Replace fake API flow with real pipeline/failure handling | ✅ |
-| Env validation, logs, basic tests | ✅ |
-| README with architecture/rubric/demo/limits | ✅ |
-# SiteBlitz
+- Live-only mode increases failure probability for blocked sites and unavailable AI model/runtime.
+- Competitor stage is strict in API flow.
