@@ -1,3 +1,20 @@
+export type TrustLevel = "VERIFIED" | "ESTIMATED" | "INFERRED" | "FALLBACK";
+
+export type TrustMeta<T = unknown> = {
+  value: T;
+  trustLevel: TrustLevel;
+  source: string;
+  /** 0–1, constrained by trust level band */
+  confidence: number;
+};
+
+export type TrustBreakdown = {
+  verified: number;
+  estimated: number;
+  inferred: number;
+  fallback: number;
+};
+
 export type Severity = "high" | "medium" | "low";
 export type IndustryCategory =
   | "ecommerce"
@@ -167,4 +184,11 @@ export type AuditReport = {
     description: string;
     url: string;
   };
+  /** Per-artifact trust labels (additive; optional for older clients). */
+  trustByField?: Record<string, TrustMeta>;
+  /** 0–100 aggregate trust score */
+  overallTrustScore?: number;
+  trustBreakdown?: TrustBreakdown;
+  /** True when blocked response, degraded fallback, or critical scan gaps */
+  scanBlockedOrDegraded?: boolean;
 };

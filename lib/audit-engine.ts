@@ -315,7 +315,7 @@ export function analyzeWebsite(htmlRaw: string, pagespeedRaw: any): AuditResult 
     fixes.push("Use one descriptive H1 and structured H2/H3 sections.");
   }
 
-  const competitorsAvg = Math.max(35, Math.min(95, overall - 8 + Math.round(Math.random() * 14)));
+  const competitorsAvg = Math.max(35, Math.min(95, overall - 8 + (overall % 13)));
 
   return {
     scores: { uiux, perf, mobile, access, seo, leads, overall },

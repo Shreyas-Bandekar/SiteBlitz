@@ -1,3 +1,7 @@
+/**
+ * Model output is non-deterministic; the API trust layer tags these as INFERRED ("AI Insight").
+ * @see lib/trust.ts
+ */
 import { env } from "./env";
 import type { AiInsights, Recommendation } from "./audit-types";
 

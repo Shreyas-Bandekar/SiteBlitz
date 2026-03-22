@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { AuditReport } from "../lib/audit-types";
+import { TrustLevelBadge } from "./TrustIndicators";
 import { Card, CardContent } from "./ui/Card";
 import { Badge } from "./ui/Badge";
 import { ChevronDown, ChevronUp, FileCode2, Search, BrainCircuit, Wrench, Smartphone, Zap } from "lucide-react";
@@ -104,8 +105,28 @@ export default function DetailedReport({ report }: { report: AuditReport }) {
 
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between pb-2 border-b border-border">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Deep Diagnostics</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Deep Diagnostics</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {report.trustByField?.live_render ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Render
+              <TrustLevelBadge level={report.trustByField.live_render.trustLevel} />
+            </span>
+          ) : null}
+          {report.trustByField?.dom_parsing ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              DOM
+              <TrustLevelBadge level={report.trustByField.dom_parsing.trustLevel} />
+            </span>
+          ) : null}
+          {report.trustByField?.lighthouse ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Lighthouse
+              <TrustLevelBadge level={report.trustByField.lighthouse.trustLevel} />
+            </span>
+          ) : null}
+        </div>
       </div>
       
       <div className="grid gap-4">
@@ -124,7 +145,7 @@ export default function DetailedReport({ report }: { report: AuditReport }) {
                   <div className="flex items-center justify-center p-2 rounded-lg bg-success/10 text-success">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground tracking-tight">{section.title}</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">{section.title}</h3>
                 </div>
                 <div className="text-foreground/50 transition-transform duration-300">
                   {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -138,28 +159,28 @@ export default function DetailedReport({ report }: { report: AuditReport }) {
                 <div className="overflow-hidden">
                   <div className="p-5 pt-0 border-t border-border mt-3">
                     {section.id === "onpage" && (
-                      <div className="grid gap-4 text-sm text-foreground/80 md:grid-cols-2">
-                        <div className="flex justify-between p-3 rounded-lg bg-secondary/30">
+                      <div className="grid gap-4 text-sm sm:text-base text-foreground/80 md:grid-cols-2">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-1 sm:gap-4">
                           <span className="font-medium">Title Tag <span className="text-muted-foreground font-normal">({report.seoDetails?.titleLength ?? 0} chars)</span></span>
                           <span className="truncate max-w-[200px] text-success">{report.serpPreview?.title || "Unavailable"}</span>
                         </div>
-                        <div className="flex justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-1 sm:gap-4">
                           <span className="font-medium">Meta Desc <span className="text-muted-foreground font-normal">({report.seoDetails?.metaLength ?? 0} chars)</span></span>
-                          <Badge variant={report.seoDetails?.metaLength ? "success" : "destructive"}>{report.seoDetails?.metaLength ? "Present" : "Missing"}</Badge>
+                          <Badge className="w-fit" variant={report.seoDetails?.metaLength ? "success" : "destructive"}>{report.seoDetails?.metaLength ? "Present" : "Missing"}</Badge>
                         </div>
-                        <div className="flex justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-1 sm:gap-4">
                           <span className="font-medium">Content Length</span>
                           <span>{computed.plainWordCount} words</span>
                         </div>
-                        <div className="flex justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-1 sm:gap-4">
                           <span className="font-medium">Images Missing Alt</span>
                           <span>{report.seoDetails?.altMissing ?? "Unavailable"}</span>
                         </div>
-                        <div className="flex justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-1 sm:gap-4">
                           <span className="font-medium">Canonical Tag</span>
                           <span className="truncate max-w-[200px] text-primary">{computed.canonical || "Not found"}</span>
                         </div>
-                        <div className="flex justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-1 sm:gap-4">
                           <span className="font-medium">Robots / Sitemap</span>
                           <span className="truncate max-w-[200px]">{computed.robotsMeta || "Unknown"} / {computed.sitemapLink ? "Detected" : "Unknown"}</span>
                         </div>
@@ -192,8 +213,8 @@ export default function DetailedReport({ report }: { report: AuditReport }) {
                     )}
 
                     {section.id === "keywords" && (
-                      <div className="rounded-xl border border-border overflow-hidden">
-                        <table className="w-full text-sm text-left">
+                      <div className="rounded-xl border border-border overflow-x-auto">
+                        <table className="w-full text-sm text-left min-w-[300px]">
                           <thead className="bg-secondary/30 text-muted-foreground text-xs uppercase tracking-wider">
                             <tr>
                               <th className="px-6 py-3 font-medium">Top Extracted Keyword</th>
@@ -225,7 +246,7 @@ export default function DetailedReport({ report }: { report: AuditReport }) {
                     )}
 
                     {section.id === "technical" && (
-                      <div className="grid gap-3 text-sm text-foreground/80 md:grid-cols-2">
+                      <div className="grid gap-3 text-sm sm:text-base text-foreground/80 md:grid-cols-2">
                         {[
                           { label: "SSL Certification", flag: report.url.startsWith("https://") },
                           { label: "HTTPS Enforcement", flag: report.url.startsWith("https://") },
@@ -233,41 +254,41 @@ export default function DetailedReport({ report }: { report: AuditReport }) {
                           { label: "Schema.org Markup", flag: computed.schema },
                           { label: "Search Indexability", flag: !computed.robotsMeta?.includes("noindex") },
                         ].map((item, i) => (
-                          <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                          <div key={i} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-secondary/30 gap-2 sm:gap-4">
                             <span className="font-medium">{item.label}</span>
-                            <Badge variant={item.flag ? "success" : "warning"}>{item.flag ? "Verified" : "Missing / Needs Check"}</Badge>
+                            <Badge className="w-fit shrink-0" variant={item.flag ? "success" : "warning"}>{item.flag ? "Verified" : "Missing / Needs Check"}</Badge>
                           </div>
                         ))}
                       </div>
                     )}
 
                     {section.id === "usability" && (
-                      <div className="grid gap-3 text-sm text-foreground/80 md:grid-cols-2">
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                      <div className="grid gap-3 text-sm sm:text-base text-foreground/80 md:grid-cols-2">
+                        <div className="flex flex-col sm:flex-row items-start justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-2 sm:gap-4">
                           <span className="font-medium">Responsive Emulation Score</span>
-                          <Badge variant={toneVariant(rowTone(report.scores.mobile, 75, 60))}>{report.scores.mobile}/100</Badge>
+                          <Badge className="w-fit shrink-0" variant={toneVariant(rowTone(report.scores.mobile, 75, 60))}>{report.scores.mobile}/100</Badge>
                         </div>
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row items-start justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-2 sm:gap-4">
                           <span className="font-medium">Meta Viewport</span>
-                          <Badge variant={computed.viewport ? "success" : "destructive"}>{computed.viewport ? "Configured" : "Missing"}</Badge>
+                          <Badge className="w-fit shrink-0" variant={computed.viewport ? "success" : "destructive"}>{computed.viewport ? "Configured" : "Missing"}</Badge>
                         </div>
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row items-start justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-2 sm:gap-4">
                           <span className="font-medium">Obsolete &lt;iframe&gt; Tags</span>
-                          <Badge variant={computed.hasIframe ? "warning" : "success"}>{computed.hasIframe ? "Detected" : "Clear"}</Badge>
+                          <Badge className="w-fit shrink-0" variant={computed.hasIframe ? "warning" : "success"}>{computed.hasIframe ? "Detected" : "Clear"}</Badge>
                         </div>
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row items-start justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-2 sm:gap-4">
                           <span className="font-medium">Flash Plugins</span>
-                          <Badge variant={computed.hasFlash ? "destructive" : "success"}>{computed.hasFlash ? "Detected" : "Clear"}</Badge>
+                          <Badge className="w-fit shrink-0" variant={computed.hasFlash ? "destructive" : "success"}>{computed.hasFlash ? "Detected" : "Clear"}</Badge>
                         </div>
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                        <div className="flex flex-col sm:flex-row items-start justify-between sm:items-center p-3 rounded-lg bg-secondary/30 gap-2 sm:gap-4">
                           <span className="font-medium">Plaintext Email Exposure</span>
-                          <Badge variant={computed.emailExposure ? "warning" : "success"}>{computed.emailExposure ? "Vulnerable" : "Secure"}</Badge>
+                          <Badge className="w-fit shrink-0" variant={computed.emailExposure ? "warning" : "success"}>{computed.emailExposure ? "Vulnerable" : "Secure"}</Badge>
                         </div>
                       </div>
                     )}
 
                     {section.id === "performance" && (
-                      <div className="grid gap-4 text-sm text-foreground/80 md:grid-cols-2">
+                      <div className="grid gap-4 text-sm sm:text-base text-foreground/80 md:grid-cols-2">
                         <div className="flex flex-col gap-1 p-4 rounded-xl bg-secondary/30 border border-border">
                           <span className="text-muted-foreground text-xs font-semibold uppercase">Total DOM Load Time</span>
                           <span className="text-2xl font-bold tracking-tight text-white">{computed.loadMs ? `${(computed.loadMs / 1000).toFixed(2)}s` : "N/A"}</span>

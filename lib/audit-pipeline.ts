@@ -9,8 +9,9 @@ import { detectIndustry, isEcommerceStorefrontHint } from "./industry";
 import { detectStructuralIssues } from "./issue-detection";
 import { captureScreenshots } from "./screenshot";
 import { computeTrendsSummary } from "./trends";
-import { computeScores, prioritizeRecommendations } from "./scoring";
-import type { AuditReport, Issue, StageTraceEntry } from "./audit-types";
+import { computeScores, prioritizeRecommendations, DETERMINISTIC_SCORES_TRUST_SOURCE } from "./scoring";
+import { makeTrustMeta } from "./trust";
+import type { AuditReport, Issue, StageTraceEntry, TrustMeta } from "./audit-types";
 
 const execFileAsync = promisify(execFile);
 const PLAYWRIGHT_DESKTOP_TIMEOUT_MS = 15000;
@@ -67,7 +68,12 @@ function formatAxeFailureDetail(error: unknown): string {
 export async function runAuditPipeline(
   rawUrl: string,
   options: { includeAi?: boolean } = {}
-): Promise<Omit<AuditReport, "competitors" | "analytics" | "roi" | "roiReason" | "isLive" | "status" | "liveTimestamp" | "auditId" | "history">> {
+): Promise<
+  Omit<AuditReport, "competitors" | "analytics" | "roi" | "roiReason" | "isLive" | "status" | "liveTimestamp" | "auditId" | "history"> & {
+    trustByField: Record<string, TrustMeta>;
+    scanBlockedOrDegraded: boolean;
+  }
+> {
   const url = normalizeUrl(rawUrl);
   if (!url) throw new Error("Invalid URL.");
 
@@ -333,6 +339,84 @@ export async function runAuditPipeline(
 
   pipeline.push("summary");
 
+  const degraded = pipeline.includes("degraded-fallback");
+  const axePartialFailure = issues.some(
+    (i) => i.category === "accessibility" && /partially unavailable|limited/i.test(`${i.title} ${i.detail}`)
+  );
+  const lighthouseOk = lighthouseResult.status === "fulfilled";
+  const screenshotOk = Boolean(screenshots?.desktop || screenshots?.mobile);
+  const scanBlockedOrDegraded =
+    Boolean(blockedResponseDetected) || degraded || (playwrightFailed && lighthouseFailed);
+
+  const trustByField: Record<string, TrustMeta> = {};
+
+  const renderLevel = degraded || blockedResponseDetected ? "FALLBACK" : playwrightFailed ? "FALLBACK" : "VERIFIED";
+  const renderConf = degraded ? 0.24 : blockedResponseDetected ? 0.28 : playwrightFailed ? 0.34 : 0.96;
+  trustByField.live_render = makeTrustMeta(
+    { playwrightFailed },
+    renderLevel,
+    playwrightFailed ? "HTTP HTML fetch (Playwright render unavailable)" : "Playwright Chromium desktop + mobile render",
+    renderConf
+  );
+
+  trustByField.lighthouse = makeTrustMeta(
+    { completed: lighthouseOk },
+    lighthouseOk ? "VERIFIED" : "FALLBACK",
+    "Lighthouse CLI (performance, SEO, accessibility categories)",
+    lighthouseOk ? 0.96 : 0.32
+  );
+
+  trustByField.axe_accessibility = makeTrustMeta(
+    { partialScan: axePartialFailure },
+    playwrightFailed || blockedResponseDetected ? "FALLBACK" : "VERIFIED",
+    "@axe-core/playwright in rendered page context",
+    playwrightFailed || blockedResponseDetected ? 0.3 : axePartialFailure ? 0.9 : 0.94
+  );
+
+  trustByField.dom_parsing = makeTrustMeta(
+    { cheerio: true },
+    blockedResponseDetected || degraded ? "FALLBACK" : "VERIFIED",
+    "Cheerio DOM extraction (metadata, headings, forms, CTAs)",
+    blockedResponseDetected || degraded ? 0.28 : 0.93
+  );
+
+  let scoreHint = 0.94;
+  let scoreLevel: TrustMeta["trustLevel"] = "VERIFIED";
+  if (blockedResponseDetected || degraded) {
+    scoreLevel = "FALLBACK";
+    scoreHint = 0.3;
+  } else if (playwrightFailed) {
+    scoreHint = 0.78;
+  } else if (!lighthouseOk) {
+    scoreHint = 0.86;
+  }
+  trustByField.deterministic_scores = makeTrustMeta(scores, scoreLevel, DETERMINISTIC_SCORES_TRUST_SOURCE, scoreHint);
+
+  trustByField.screenshots = makeTrustMeta(
+    { desktop: Boolean(screenshots?.desktop), mobile: Boolean(screenshots?.mobile) },
+    screenshotOk ? "VERIFIED" : "FALLBACK",
+    "Puppeteer viewport screenshot capture",
+    screenshotOk ? 0.93 : 0.32
+  );
+
+  trustByField.content_suggestions = makeTrustMeta(
+    contentFixes,
+    "INFERRED",
+    "Rule-based content suggestions (audit-engine)",
+    0.58
+  );
+
+  trustByField.trends_summary = makeTrustMeta(
+    trendsSummary,
+    "ESTIMATED",
+    "Single-audit snapshot baseline (trends.ts)",
+    0.66
+  );
+
+  if (aiInsights) {
+    trustByField.ai_insights = makeTrustMeta(aiInsights, "INFERRED", "Ollama /api/generate structured JSON", 0.62);
+  }
+
   return {
     url,
     scores,
@@ -343,6 +427,8 @@ export async function runAuditPipeline(
     trends,
     trendsSummary,
     aiInsights,
+    trustByField,
+    scanBlockedOrDegraded,
     disclaimers: [
       "Live-only mode: all values come from real-time scans.",
       ...(blockedResponseDetected

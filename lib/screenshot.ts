@@ -1,4 +1,6 @@
 const SCREENSHOT_NAV_TIMEOUT_MS = 30000;
+/** Wait after navigation before capture so JS-heavy / lazy sites paint real content (not blank). */
+const POST_LOAD_SETTLE_MS = 2000;
 const DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 
@@ -18,8 +20,8 @@ async function safeGoto(page: import("puppeteer").Page, url: string) {
   } catch {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: SCREENSHOT_NAV_TIMEOUT_MS + 15000 });
   }
-  // Brief settle for headless paint / lazy storefronts (Shopify, etc.)
-  await new Promise((r) => setTimeout(r, 400));
+  // Let client-side render, images, and fonts settle before screenshot
+  await new Promise((r) => setTimeout(r, POST_LOAD_SETTLE_MS));
 }
 
 export async function captureScreenshots(url: string) {

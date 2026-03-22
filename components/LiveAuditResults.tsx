@@ -2,6 +2,7 @@
 
 import type { AuditReport } from "../lib/audit-types";
 import { LiveDataBadges, IndustryBadge, ROISourceBadge } from "./LiveDataBadges";
+import { TrustLevelBadge, TrustScoreCard } from "./TrustIndicators";
 import AuditCards from "./AuditCards";
 import CircularScore from "./CircularScore";
 import LetterGrade from "./LetterGrade";
@@ -34,45 +35,67 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
   return (
     <div className="mt-8 space-y-8">
       {/* Top Overview Section */}
-      <Card>
-        <CardContent className="flex flex-col items-center justify-between gap-6 p-6 md:flex-row">
-          <div className="flex items-center gap-6">
-            <LetterGrade score={report.scores.overall} />
-            <div>
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                <p className="font-mono text-sm text-muted-foreground">Target URL</p>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardContent className="flex flex-col items-center justify-between gap-6 p-6 md:flex-row">
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 min-w-0 flex-1 w-full md:w-auto text-center sm:text-left">
+              <div className="shrink-0">
+                <LetterGrade score={report.scores.overall} />
               </div>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">{report.url}</h2>
+              <div className="min-w-0 flex-1 w-full max-w-[280px] sm:max-w-none">
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <Target className="h-4 w-4 text-primary shrink-0" />
+                  <p className="font-mono text-sm text-muted-foreground truncate">Target URL</p>
+                </div>
+                <h2 className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate" title={report.url}>{report.url}</h2>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <CircularScore score={report.scores.overall} />
-            <PDFReport
-              payload={{
-                url: report.url,
-                scores: report.scores,
-                issues: report.issues,
-                recommendations: report.recommendations,
-                summary: report.summary || report.aiInsights?.executiveSummary || "",
-                aiInsights: report.aiInsights,
-                detectedIndustry: report.detectedIndustry,
-                roi: report.roi || undefined,
-                trendsSummary: report.trendsSummary,
-                pipeline: report.pipeline,
-              }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 shrink-0 flex-wrap justify-center">
+              <CircularScore score={report.scores.overall} />
+              <PDFReport
+                payload={{
+                  url: report.url,
+                  scores: report.scores,
+                  issues: report.issues,
+                  recommendations: report.recommendations,
+                  summary: report.summary || report.aiInsights?.executiveSummary || "",
+                  aiInsights: report.aiInsights,
+                  detectedIndustry: report.detectedIndustry,
+                  competitors: report.competitors?.length
+                    ? { topCompetitors: report.competitors.map((c) => ({ name: c.url, overall: c.score })) }
+                    : undefined,
+                  roi: report.roi || undefined,
+                  trendsSummary: report.trendsSummary,
+                  pipeline: report.pipeline,
+                  overallTrustScore: report.overallTrustScore,
+                  trustBreakdown: report.trustBreakdown,
+                  roiTrustMeta: report.trustByField?.roi ?? null,
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        {report.overallTrustScore != null && report.trustBreakdown ? (
+          <TrustScoreCard
+            overallTrustScore={report.overallTrustScore}
+            trustBreakdown={report.trustBreakdown}
+            scanBlockedOrDegraded={report.scanBlockedOrDegraded}
+          />
+        ) : null}
+      </div>
 
       {/* Main Dashboard Grid */}
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Left Column: Metrics & Screenshots */}
         <div className="space-y-8 lg:col-span-2">
           <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-semibold tracking-tight text-foreground">Core Diagnostics</h3>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xl font-semibold tracking-tight text-foreground">Core Diagnostics</h3>
+                {report.trustByField?.deterministic_scores ? (
+                  <TrustLevelBadge level={report.trustByField.deterministic_scores.trustLevel} />
+                ) : null}
+              </div>
               <div className="flex gap-2">
                 <Badge variant="destructive">{counts.high} High</Badge>
                 <Badge variant="warning">{counts.medium} Med</Badge>
@@ -107,7 +130,7 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
               )}
             </CardContent>
           </Card>
-          
+
           {/* Moved Full Priority List into Left Column to eliminate empty space */}
           <Card>
             <CardHeader>
@@ -147,13 +170,24 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
 
         {/* Right Column: AI Insights, Data Sources, Radar */}
         <div className="space-y-8">
-          <ScoreRadar scores={report.scores} />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-sm font-medium text-muted-foreground">Score radar</h3>
+              {report.trustByField?.deterministic_scores ? (
+                <TrustLevelBadge level={report.trustByField.deterministic_scores.trustLevel} />
+              ) : null}
+            </div>
+            <ScoreRadar scores={report.scores} />
+          </div>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg text-primary">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-lg text-primary">
                 <TrendingUp className="h-5 w-5" />
                 AI Content Insights
+                {report.trustByField?.content_suggestions ? (
+                  <TrustLevelBadge level={report.trustByField.content_suggestions.trustLevel} />
+                ) : null}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -164,7 +198,7 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
                       <Badge variant="outline" className="text-primary">{fix.type}</Badge>
                       <span className="text-xs text-muted-foreground">{fix.confidence}% conf</span>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="rounded-md border border-destructive/10 bg-destructive/5 p-3">
                         <span className="mb-1 block text-[10px] font-bold tracking-wider text-destructive uppercase">Before</span>

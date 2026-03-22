@@ -24,20 +24,22 @@ const INDUSTRY_DEFAULTS: Record<
 };
 
 export async function getFreeTrafficEstimate(
-  industry: IndustryCategory
+  industry: IndustryCategory,
+  overallScore?: number
 ): Promise<TrafficEstimate> {
   const defaults = INDUSTRY_DEFAULTS[industry] || INDUSTRY_DEFAULTS.other;
-
-  // Add realistic variance (±20%) to simulate real traffic variations
-  const variance = 0.8 + Math.random() * 0.4;
-  const estimatedTraffic = Math.round(defaults.traffic * variance);
+  const overall = Math.min(100, Math.max(0, Math.round(overallScore ?? 65)));
+  /** Deterministic nudge from score (no randomness): ~0.92–1.08× base traffic */
+  const trafficMult = 0.92 + (overall / 100) * 0.16;
+  const convMult = 0.97 + (overall / 100) * 0.06;
+  const aovMult = 0.96 + ((overall * 13) % 9) * 0.01;
 
   return {
-    traffic: estimatedTraffic,
-    conversionRate: defaults.conversionRate + (Math.random() - 0.5) * 0.008,
-    avgOrderValue: Math.round(defaults.avgOrderValue * (0.9 + Math.random() * 0.2)),
-    dataSource: "Industry benchmarks + PageSpeed Insights data",
-    confidence: 72, // Honest confidence for estimated traffic
+    traffic: Math.round(defaults.traffic * trafficMult),
+    conversionRate: Math.min(0.2, Math.max(0.001, defaults.conversionRate * convMult)),
+    avgOrderValue: Math.round(defaults.avgOrderValue * aovMult),
+    dataSource: "Industry benchmarks + deterministic score-based calibration",
+    confidence: Math.round(58 + overall * 0.22),
   };
 }
 
@@ -70,6 +72,9 @@ export async function calculateLiveROI(
         ? Math.round((monthlyUplift / currentRevenue) * 100)
         : 0;
 
+    const template: ROIResult["template"] =
+      industry === "ecommerce" || industry === "saas" || industry === "local_service" ? industry : "custom";
+
     return {
       traffic,
       conversionRate,
@@ -79,7 +84,7 @@ export async function calculateLiveROI(
       projectedRevenue,
       monthlyUplift,
       upliftPercent,
-      template: "custom",
+      template,
     };
   } catch (error) {
     console.error("[FreeROI] Error calculating ROI:", error);

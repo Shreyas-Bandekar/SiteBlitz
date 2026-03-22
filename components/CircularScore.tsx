@@ -6,7 +6,7 @@ export default function CircularScore({ score }: { score: number }) {
   const offset = circumference - (Math.max(0, Math.min(100, score)) / 100) * circumference;
 
   return (
-    <div className="relative flex h-36 w-36 items-center justify-center">
+    <div className="relative flex h-36 w-36 shrink-0 items-center justify-center">
       <svg className="-rotate-90" width="136" height="136" viewBox="0 0 136 136">
         <circle cx="68" cy="68" r={radius} stroke="currentColor" className="text-secondary" strokeWidth="10" fill="none" />
         <circle

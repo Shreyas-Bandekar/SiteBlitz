@@ -1,3 +1,6 @@
+/**
+ * Enterprise / analytics-backed ROI helpers. Live API responses tag ROI as ESTIMATED in the trust layer (see lib/trust.ts).
+ */
 import type { ROIResult } from "./audit-types";
 import type { DeterministicScores, LiveAnalytics } from "./audit-types";
 

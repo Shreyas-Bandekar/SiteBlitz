@@ -1,5 +1,9 @@
 import type { AuditReport, DeterministicScores, Issue, Recommendation } from "./audit-types";
 
+/** Provenance string for trust metadata on deterministic category scores */
+export const DETERMINISTIC_SCORES_TRUST_SOURCE =
+  "Deterministic rubric: Lighthouse (performance, SEO, accessibility) + Cheerio DOM signals";
+
 type CacheEntry = { value: number; expiresAt: number };
 const scoreCache = new Map<string, CacheEntry>();
 type ReportCacheEntry = { value: AuditReport; expiresAt: number };

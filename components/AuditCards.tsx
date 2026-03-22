@@ -91,7 +91,7 @@ export default function AuditCards({ scores, industryAverageOverall }: { scores:
           </Card>
         );
       })}
-      
+
       {typeof industryAverageOverall === "number" ? (
         <Card className="border-primary bg-primary/5 transition-colors">
           <CardContent className="p-5">

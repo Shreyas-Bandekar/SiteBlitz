@@ -70,17 +70,19 @@ export default function MarketingPage() {
             onSubmit={onSubmit} 
             className="relative w-full max-w-2xl"
           >
-            <div className="relative flex items-center rounded-xl border border-border bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-foreground transition-all">
-              <Search className="ml-4 h-5 w-5 text-muted-foreground" />
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://yourwebsite.com"
-                className="w-full bg-transparent px-4 py-3 text-lg text-foreground placeholder:text-muted-foreground focus:outline-none"
-                required
-                type="url"
-              />
-              <Button type="submit" variant="default" size="lg" className="px-8 font-semibold">
+            <div className="relative flex flex-col sm:flex-row items-stretch sm:items-center rounded-xl border border-border bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-foreground transition-all gap-2 sm:gap-0">
+              <div className="relative flex flex-1 items-center">
+                <Search className="absolute left-4 h-5 w-5 text-muted-foreground" />
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  className="w-full bg-transparent py-3 pl-12 pr-4 text-lg text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  required
+                  type="url"
+                />
+              </div>
+              <Button type="submit" variant="default" size="lg" className="px-8 font-semibold w-full sm:w-auto shrink-0">
                 Analyze
               </Button>
             </div>

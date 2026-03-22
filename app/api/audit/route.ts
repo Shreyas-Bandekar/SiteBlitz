@@ -7,7 +7,8 @@ import { runLiveCompetitorAudits } from "../../../lib/live-competitors";
 import { detectIndustryFromContent, improveIndustryDetectionWithMetrics } from "../../../lib/content-industry";
 import { getLiveBenchmarks } from "../../../lib/live-benchmarks";
 import { calculateLiveROI, getFreeTrafficEstimate } from "../../../lib/free-roi";
-import type { StageTraceEntry, IndustryCategory } from "../../../lib/audit-types";
+import { makeTrustMeta, calculateOverallTrustScore, calculateTrustBreakdown } from "../../../lib/trust";
+import type { StageTraceEntry, IndustryCategory, TrustMeta } from "../../../lib/audit-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
 
     // NEW: Free ROI calculation using PageSpeed + industry benchmarks
     const trafficEstimate = await runRouteStage(stageTrace, auditId, url, "traffic-estimate", async () =>
-      getFreeTrafficEstimate(contentIndustry.category as IndustryCategory)
+      getFreeTrafficEstimate(contentIndustry.category as IndustryCategory, pipelineResult.scores.overall)
     );
 
     const roiOutput = await runRouteStage(stageTrace, auditId, url, "roi", async () => {
@@ -114,10 +115,48 @@ export async function POST(req: Request) {
       }
     }
 
+    const trustByField: Record<string, TrustMeta> = { ...(pipelineResult.trustByField || {}) };
+
+    trustByField.roi = makeTrustMeta(
+      roiOutput.roi,
+      roiOutput.roi ? "ESTIMATED" : "FALLBACK",
+      roiOutput.roi
+        ? "Industry traffic estimate + deterministic score-gap uplift (free-roi)"
+        : "ROI unavailable for this run",
+      roiOutput.roi ? 0.72 : 0.28
+    );
+
+    trustByField.traffic_estimate = makeTrustMeta(
+      {
+        traffic: trafficEstimate.traffic,
+        conversionRate: trafficEstimate.conversionRate,
+        avgOrderValue: trafficEstimate.avgOrderValue,
+      },
+      "ESTIMATED",
+      trafficEstimate.dataSource,
+      0.68
+    );
+
+    trustByField.analytics_signals = makeTrustMeta(analytics, "INFERRED", "Heuristic HTML scan for analytics identifiers", 0.58);
+
+    trustByField.competitor_benchmarks = makeTrustMeta(
+      competitors,
+      flags.enrichCompetitors && benchmarks.length > 0 ? "ESTIMATED" : "FALLBACK",
+      flags.enrichCompetitors ? "Cached live benchmarks + audits" : "Competitor enrichment not requested (fast mode)",
+      flags.enrichCompetitors && benchmarks.length > 0 ? 0.72 : 0.34
+    );
+
+    const trustValues = Object.values(trustByField);
+    const overallTrustScore = calculateOverallTrustScore(trustValues);
+    const trustBreakdown = calculateTrustBreakdown(trustValues);
+
     return Response.json({
       ...pipelineResult,
       auditId,
       liveTimestamp: nowIso,
+      trustByField,
+      overallTrustScore,
+      trustBreakdown,
       pipeline: [...pipelineResult.pipeline, flags.enrichCompetitors ? "live-benchmarks" : "live-benchmarks:skipped", "traffic-estimate", "live-db"],
       competitors,
       competitorSources: benchmarks.map(b => ({

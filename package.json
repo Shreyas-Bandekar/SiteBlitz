@@ -17,6 +17,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "html-to-pdfmake": "latest",
+    "jspdf": "^4.2.1",
     "lighthouse": "latest",
     "lucide-react": "^0.577.0",
     "next": "latest",
