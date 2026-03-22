@@ -20,13 +20,13 @@ export default function ScreenshotCard({
   const [tab, setTab] = useState<"desktop" | "mobile">("desktop");
   const desktopSrc = toImageSrc(screenshots?.desktop || screenshot);
   const mobileSrc = toImageSrc(screenshots?.mobile);
-  const currentSrc = tab === "desktop" ? desktopSrc : mobileSrc;
   const hasAny = Boolean(desktopSrc || mobileSrc);
   const fallbackTab = useMemo(() => {
     if (tab === "desktop" && !desktopSrc && mobileSrc) return "mobile";
     if (tab === "mobile" && !mobileSrc && desktopSrc) return "desktop";
     return tab;
   }, [tab, desktopSrc, mobileSrc]);
+  const currentSrc = fallbackTab === "desktop" ? desktopSrc : mobileSrc;
 
   return (
     <article className="glass rounded-2xl border border-white/20 bg-gradient-to-br from-white/15 to-white/5 p-5 transition-transform hover:scale-105">
@@ -49,11 +49,17 @@ export default function ScreenshotCard({
         </button>
       </div>
       {hasAny && currentSrc ? (
-        <img
-          src={currentSrc}
-          alt={`Captured ${fallbackTab} screenshot of ${url}`}
-          className="max-h-[420px] w-full rounded-xl border border-white/20 object-contain"
-        />
+        <div className="rounded-xl border border-white/20 bg-black/20 p-3">
+          <img
+            src={currentSrc}
+            alt={`Captured ${fallbackTab} screenshot of ${url}`}
+            className={
+              fallbackTab === "desktop"
+                ? "h-[420px] w-full rounded-lg object-cover object-top"
+                : "mx-auto h-[420px] w-auto max-w-full rounded-lg object-contain"
+            }
+          />
+        </div>
       ) : (
         <div className="rounded-xl border border-dashed border-white/25 p-8 text-center text-sm text-slate-300">
           Screenshot unavailable (timeout or blocked by site policy).

@@ -4,11 +4,8 @@ import type { AuditReport } from "../lib/audit-types";
 import { LiveDataBadges, IndustryBadge, ROISourceBadge } from "./LiveDataBadges";
 import AuditCards from "./AuditCards";
 import CircularScore from "./CircularScore";
-import CompetitorLiveTable from "./CompetitorLiveTable";
 import LetterGrade from "./LetterGrade";
-import LiveDatabaseHistory from "./LiveDatabaseHistory";
 import PDFReport from "./PDFReport";
-import RealROICalculator from "./RealROICalculator";
 import ScoreRadar from "./ScoreRadar";
 import ScreenshotCard from "./ScreenshotCard";
 
@@ -99,6 +96,9 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
           )}
         </div>
       </div>
+
+      <ScreenshotCard screenshot={report.screenshot} screenshots={report.screenshots} url={report.url} />
+
       <AuditCards scores={report.scores} industryAverageOverall={competitorAvg ?? undefined} />
       <ScoreRadar scores={report.scores} />
 
@@ -123,11 +123,6 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
             </p>
           </div>
         ) : null}
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <CompetitorLiveTable competitors={report.competitors} />
-        <LiveDatabaseHistory records={report.history} />
       </div>
 
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
@@ -175,7 +170,6 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
         )}
       </div>
 
-      <RealROICalculator roi={report.roi} reason={report.roiReason} />
     </div>
   );
 }

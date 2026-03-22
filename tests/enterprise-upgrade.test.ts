@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectIndustry } from "../lib/industry";
+import { detectIndustry, isEcommerceStorefrontHint } from "../lib/industry";
 import { extractLiveAnalytics } from "../lib/live-analytics";
 import { calculateRealROI } from "../lib/roi";
 import { classifyFailedStage, resolveEnrichmentFlags } from "../app/api/audit/route";
@@ -11,6 +11,16 @@ test("industry detection confidence gating", () => {
   const result = detectIndustry(html);
   assert.equal(result.category, "ecommerce");
   assert.ok(result.confidence >= 75);
+});
+
+test("ecommerce storefront hint from URL or Shopify assets", () => {
+  assert.equal(isEcommerceStorefrontHint("", "https://www.shopify.com/"), true);
+  assert.equal(isEcommerceStorefrontHint("", "https://cool-shoes.myshopify.com/"), true);
+  assert.equal(
+    isEcommerceStorefrontHint('<script src="https://cdn.shopify.com/s/files/1/theme.js"></script>', "https://example.com/"),
+    true
+  );
+  assert.equal(isEcommerceStorefrontHint("<html><body>Hello</body></html>", "https://example.com/"), false);
 });
 
 test("live analytics parser extracts public script signals", () => {

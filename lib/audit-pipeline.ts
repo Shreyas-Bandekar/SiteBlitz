@@ -5,7 +5,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { generateContentSuggestions } from "./audit-engine";
 import { generateAiInsights } from "./ai-insights";
-import { detectIndustry } from "./industry";
+import { detectIndustry, isEcommerceStorefrontHint } from "./industry";
+import { detectStructuralIssues } from "./issue-detection";
+import { captureScreenshots } from "./screenshot";
 import { computeTrendsSummary } from "./trends";
 import { computeScores, prioritizeRecommendations } from "./scoring";
 import type { AuditReport, Issue, StageTraceEntry } from "./audit-types";
@@ -14,9 +16,9 @@ const execFileAsync = promisify(execFile);
 const PLAYWRIGHT_DESKTOP_TIMEOUT_MS = 15000;
 const AXE_TIMEOUT_MS = 10000;
 const MOBILE_TIMEOUT_MS = 12000;
-const SCREENSHOT_TIMEOUT_MS = 18000;
-const LIGHTHOUSE_TIMEOUT_MS = 25000;
-const HTML_FETCH_TIMEOUT_MS = 10000;
+const SCREENSHOT_TIMEOUT_MS = 65000;
+const LIGHTHOUSE_TIMEOUT_MS = 45000;
+const HTML_FETCH_TIMEOUT_MS = 30000;
 
 function normalizeUrl(input: string) {
   const trimmed = input.trim();
@@ -58,21 +60,33 @@ export async function runAuditPipeline(
       withTimeout(async () => {
       const browser = await chromium.launch({ headless: true });
       try {
+        const desktopCtx = await browser.newContext();
         pipeline.push("playwright-desktop");
-        const page = await browser.newPage();
+        const page = await desktopCtx.newPage();
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: PLAYWRIGHT_DESKTOP_TIMEOUT_MS });
         desktopHtml = await page.content();
 
         pipeline.push("axe-accessibility");
-        const axe = await withTimeout(async () => await new AxeBuilder({ page }).analyze(), AXE_TIMEOUT_MS, "axe");
-        const axeViolations = axe.violations.length;
-        if (axeViolations > 0) {
+        try {
+          const axe = await withTimeout(async () => await new AxeBuilder({ page }).analyze(), AXE_TIMEOUT_MS, "axe");
+          const axeViolations = axe.violations.length;
+          if (axeViolations > 0) {
+            issues.push(
+              failIssue(
+                "accessibility",
+                "Accessibility violations detected",
+                `axe-core reported ${axeViolations} violation group(s).`,
+                axeViolations > 10 ? "high" : axeViolations > 3 ? "medium" : "low"
+              )
+            );
+          }
+        } catch (error) {
           issues.push(
             failIssue(
               "accessibility",
-              "Accessibility violations detected",
-              `axe-core reported ${axeViolations} violation group(s).`,
-              axeViolations > 10 ? "high" : axeViolations > 3 ? "medium" : "low"
+              "Accessibility scan partially unavailable",
+              `axe-core scan skipped for this run: ${error instanceof Error ? error.message : "unknown error"}`,
+              "low"
             )
           );
         }
@@ -84,6 +98,7 @@ export async function runAuditPipeline(
         mobileHtml = await mobilePage.content();
         mobileTapTargets = await mobilePage.locator("a,button,input[type='button'],input[type='submit']").count();
         await mobileCtx.close();
+        await desktopCtx.close();
       } finally {
         await browser.close();
       }
@@ -111,18 +126,7 @@ export async function runAuditPipeline(
     );
 
     const htmlFallback = await runStageTrace(stageTrace, "http-html", async () =>
-      await withTimeout(async () => {
-        const res = await fetch(url, {
-          method: "GET",
-          redirect: "follow",
-          headers: {
-            "User-Agent": "Mozilla/5.0 (compatible; SiteBlitzLiveAudit/1.0)",
-            Accept: "text/html,application/xhtml+xml",
-          },
-        });
-        if (!res.ok) throw new Error(`http-html returned ${res.status}`);
-        return await res.text();
-      }, HTML_FETCH_TIMEOUT_MS, "http-html")
+      await withTimeout(async () => await fetchHtmlFallback(url), HTML_FETCH_TIMEOUT_MS, "http-html")
     ).catch((error) => {
       throw withTrace(error, stageTrace);
     });
@@ -156,7 +160,17 @@ export async function runAuditPipeline(
   }
 
   if (!desktopHtml && lighthouseFailed) {
-    throw withTrace(new Error("No usable live data: rendered scan and Lighthouse both failed."), stageTrace);
+    issues.push(
+      failIssue(
+        "uiux",
+        "Severe network/runtime restrictions",
+        "Primary render and Lighthouse failed. Returning a degraded report from minimal fallback signals.",
+        "high"
+      )
+    );
+    desktopHtml = `<html><head><title>${escapeHtml(url)}</title></head><body><main>degraded-fallback</main></body></html>`;
+    mobileHtml = desktopHtml;
+    pipeline.push("degraded-fallback");
   }
 
   const screenshots = screenshotResult.status === "fulfilled" ? screenshotResult.value : undefined;
@@ -193,13 +207,30 @@ export async function runAuditPipeline(
     .length;
   const mobileTapTargetsOk = !playwrightFailed && mobileTapTargets >= 3;
 
-  if (!titlePresent) issues.push(failIssue("seo", "Missing title tag", "Add a unique title to improve search snippets.", "high"));
-  if (!metaDescriptionPresent) issues.push(failIssue("seo", "Missing meta description", "Add a description for stronger CTR in search results.", "medium"));
-  if (h1Count !== 1) issues.push(failIssue("uiux", "Heading hierarchy issue", "Use exactly one H1 and structured H2/H3 sections.", "medium"));
-  if (!hasViewport) issues.push(failIssue("mobile", "Missing viewport meta", "Add viewport meta for mobile layout.", "high"));
-  if (!mobileTapTargetsOk) issues.push(failIssue("mobile", "Low mobile tap target coverage", "Increase tappable controls for mobile UX.", "medium"));
-  if (formCount === 0) issues.push(failIssue("leadConversion", "No lead form detected", "Add a lead form near primary CTA.", "high"));
-  if (ctaCount === 0) issues.push(failIssue("leadConversion", "No clear CTA text", "Add action-oriented CTAs.", "high"));
+  const industryHint = detectIndustry(desktopHtml || mobileHtml);
+  const isEcommerce =
+    industryHint.category === "ecommerce" || isEcommerceStorefrontHint(desktopHtml || mobileHtml || "", url);
+  const scriptCount = $("script").length;
+  const domNodeCount = $("*").length;
+  issues.push(
+    ...detectStructuralIssues({
+      titlePresent,
+      metaDescriptionPresent,
+      h1Count,
+      hasViewport,
+      mobileTapTargetsOk,
+      formCount,
+      ctaCount,
+      scriptCount,
+      domNodeCount,
+      isEcommerce,
+    })
+  );
+
+  const customPerformanceSignal = Math.min(
+    100,
+    Math.max(0, 60 + (hasViewport ? 10 : 0) + (mobileTapTargetsOk ? 10 : 0) + (ctaCount > 0 ? 10 : 0) + (formCount > 0 ? 10 : 0))
+  );
 
   const scores = computeScores({
     lighthousePerformance,
@@ -212,6 +243,8 @@ export async function runAuditPipeline(
     metaDescriptionPresent,
     formCount,
     ctaCount,
+    ecommerceHint: isEcommerce,
+    customPerformanceSignal,
   });
 
   const recommendations = prioritizeRecommendations(issues).sort((a, b) => {
@@ -220,7 +253,7 @@ export async function runAuditPipeline(
   });
 
   pipeline.push("report-assembly");
-  const detectedIndustry = detectIndustry(desktopHtml || mobileHtml);
+  const detectedIndustry = industryHint;
   const contentFixes = generateContentSuggestions(desktopHtml || mobileHtml, detectedIndustry.category, detectedIndustry.confidence);
   const trends = [{ date: new Date().toISOString(), overall: scores.overall }];
   const trendsSummary = computeTrendsSummary(trends);
@@ -343,41 +376,43 @@ async function runLighthouseCli(url: string) {
   return JSON.parse(trimmed.slice(start)) as { categories?: Record<string, { score: number }> };
 }
 
-async function captureScreenshots(url: string) {
-  const start = Date.now();
-  console.log("[screenshot:start]", JSON.stringify({ url, timeoutMs: SCREENSHOT_TIMEOUT_MS }));
-  const puppeteer = await import("puppeteer");
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-gpu"] });
-  try {
-    let desktop: string | undefined;
-    let mobile: string | undefined;
+async function fetchHtmlFallback(url: string): Promise<string> {
+  const attempts: Array<HeadersInit | undefined> = [
+    {
+      "User-Agent": "Mozilla/5.0 (compatible; SiteBlitzLiveAudit/1.0)",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    undefined,
+  ];
 
-    const desktopPage = await browser.newPage();
-    await desktopPage.setViewport({ width: 1440, height: 2000 });
+  let lastError: unknown;
+  for (const headers of attempts) {
     try {
-      await desktopPage.goto(url, { waitUntil: "networkidle2", timeout: SCREENSHOT_TIMEOUT_MS });
-      const raw = ((await desktopPage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
-      desktop = `data:image/png;base64,${raw}`;
+      const res = await fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        headers,
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`http-html returned ${res.status}`);
+      const html = await res.text();
+      if (!html || html.length < 100) throw new Error("http-html returned insufficient content");
+      return html;
     } catch (error) {
-      console.log("[screenshot:desktop:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
+      lastError = error;
     }
-
-    const mobilePage = await browser.newPage();
-    await mobilePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-    try {
-      await mobilePage.goto(url, { waitUntil: "networkidle2", timeout: SCREENSHOT_TIMEOUT_MS });
-      const raw = ((await mobilePage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
-      mobile = `data:image/png;base64,${raw}`;
-    } catch (error) {
-      console.log("[screenshot:mobile:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
-    }
-
-    if (!desktop && !mobile) {
-      throw new Error("screenshot stage failed: both desktop and mobile captures failed");
-    }
-    console.log("[screenshot:end]", JSON.stringify({ url, durationMs: Date.now() - start, desktop: Boolean(desktop), mobile: Boolean(mobile) }));
-    return { desktop, mobile };
-  } finally {
-    await browser.close();
   }
+
+  throw lastError instanceof Error ? lastError : new Error("http-html fallback failed");
 }
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+

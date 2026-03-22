@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import LiveScanningAnimation from "../../../components/LiveScanningAnimation";
 import LiveAuditResults from "../../../components/LiveAuditResults";
 import DetailedReport from "../../../components/DetailedReport";
@@ -13,16 +13,20 @@ export default function AuditPage() {
   const [report, setReport] = useState<AuditReport | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
   const [stage, setStage] = useState(0);
+  const [nowText, setNowText] = useState("--");
   const [error, setError] = useState("");
   const [failedStage, setFailedStage] = useState("");
   const [stageTrace, setStageTrace] = useState<Array<{ stage: string; status: string }>>([]);
   const [fastMode, setFastMode] = useState(true);
+  const autoStartedRef = useRef(false);
 
   useEffect(() => {
+    if (autoStartedRef.current) return;
     const params = new URLSearchParams(window.location.search);
     const source = params.get("url") || "";
     if (source) setUrl(source);
     if (source && params.get("autoStart") === "1") {
+      autoStartedRef.current = true;
       void runLiveAudit(source);
     }
   }, []);
@@ -32,6 +36,13 @@ export default function AuditPage() {
     const timer = setInterval(() => setStage((prev) => (prev + 1) % 8), 700);
     return () => clearInterval(timer);
   }, [isAuditing]);
+
+  useEffect(() => {
+    const updateNow = () => setNowText(new Date().toLocaleString());
+    updateNow();
+    const timer = setInterval(updateNow, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const runLiveAudit = async (value?: string) => {
     const target = (value ?? url).trim();
@@ -80,7 +91,7 @@ export default function AuditPage() {
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-4">
           <div className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
           <span className="font-mono text-sm text-red-200">LIVE SCANNING ACTIVE</span>
-          <span className="ml-auto font-mono text-sm text-white/70">{new Date().toLocaleString()}</span>
+          <span className="ml-auto font-mono text-sm text-white/70">{nowText}</span>
         </div>
       </div>
 

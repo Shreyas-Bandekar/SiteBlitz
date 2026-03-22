@@ -149,8 +149,9 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    const failedStage = classifyFailedStage(message);
     const traced = (error as { stageTrace?: StageTraceEntry[] } | undefined)?.stageTrace;
+    const lastFailedStage = traced?.filter((s) => s.status === "failed").at(-1)?.stage;
+    const failedStage = mapTraceStageToFailedStage(lastFailedStage) ?? classifyFailedStage(message);
     return Response.json({
       status: "live-failed",
       isLive: false,
@@ -175,16 +176,31 @@ export function resolveEnrichmentFlags(input: {
   };
 }
 
-export function classifyFailedStage(message: string): "playwright" | "axe" | "mobile" | "screenshot" | "lighthouse" | "ai" | "db" | "competitors" | "unknown" {
+export function classifyFailedStage(message: string): "playwright" | "axe" | "mobile" | "screenshot" | "lighthouse" | "ai" | "db" | "competitors" | "http-html" | "unknown" {
   const text = message.toLowerCase();
   if (text.includes("playwright")) return "playwright";
   if (text.includes("axe")) return "axe";
   if (text.includes("mobile")) return "mobile";
   if (text.includes("screenshot") || text.includes("puppeteer")) return "screenshot";
   if (text.includes("lighthouse")) return "lighthouse";
+  if (text.includes("http-html") || text.includes("no usable live data") || text.includes("degraded-fallback")) return "http-html";
   if (text.includes("ai stage")) return "ai";
   if (text.includes("db") || text.includes("postgres")) return "db";
   if (text.includes("competitor")) return "competitors";
+  return "unknown";
+}
+
+function mapTraceStageToFailedStage(stage: string | undefined): "playwright" | "axe" | "mobile" | "screenshot" | "lighthouse" | "ai" | "db" | "competitors" | "http-html" | "unknown" | null {
+  if (!stage) return null;
+  if (stage === "http-html") return "http-html";
+  if (stage === "screenshot") return "screenshot";
+  if (stage === "lighthouse") return "lighthouse";
+  if (stage === "playwright") return "playwright";
+  if (stage === "db" || stage === "db-history") return "db";
+  if (stage === "competitors" || stage === "live-benchmarks") return "competitors";
+  if (stage === "ai") return "ai";
+  if (stage === "mobile") return "mobile";
+  if (stage === "axe") return "axe";
   return "unknown";
 }
 

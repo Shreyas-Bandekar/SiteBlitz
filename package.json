@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "tsc --noEmit",
     "test": "tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
@@ -14,6 +14,7 @@
     "@vercel/postgres": "^0.10.0",
     "cheerio": "latest",
     "chrome-launcher": "latest",
+    "framer-motion": "^12.38.0",
     "html-to-pdfmake": "latest",
     "lighthouse": "latest",
     "next": "latest",

@@ -24,6 +24,33 @@ function extractSignals(html: string) {
   return `${title} ${h1} ${metaDescription} ${html} ${schema}`.toLowerCase();
 }
 
+/** True when URL or HTML clearly indicates a storefront (Shopify/Woo, etc.) — used for scoring + issue whitelist. */
+export function isEcommerceStorefrontHint(htmlRaw: string, pageUrl: string): boolean {
+  let host = "";
+  try {
+    host = new URL(pageUrl).hostname.toLowerCase();
+  } catch {
+    /* ignore */
+  }
+  if (
+    host === "shopify.com" ||
+    host.endsWith(".shopify.com") ||
+    host.endsWith(".myshopify.com") ||
+    host.includes("bigcommerce") ||
+    host.includes("woocommerce")
+  ) {
+    return true;
+  }
+  const h = String(htmlRaw || "").toLowerCase();
+  return (
+    h.includes("cdn.shopify.com") ||
+    h.includes("shopifycdn.com") ||
+    h.includes("shopify.theme") ||
+    h.includes("woocommerce") ||
+    h.includes("bigcommerce.com")
+  );
+}
+
 export function detectIndustry(htmlRaw: string): IndustryDetection {
   const corpus = extractSignals(String(htmlRaw || ""));
   const byCategory = new Map<IndustryCategory, { score: number; signals: string[] }>();
