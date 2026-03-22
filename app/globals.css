@@ -87,3 +87,44 @@ body {
     opacity: 1;
   }
 }
+
+/* Live Data Indicators */
+.live-badge {
+  background: linear-gradient(90deg, #ef4444 0%, #22c55e 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.audit-fresh {
+  color: #10b981;
+  font-family: "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", monospace;
+  letter-spacing: 0.02em;
+}
+
+.live-spinner {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: live-pulse 2s infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.live-timer {
+  font-family: "SF Mono", "Monaco", monospace;
+  font-size: 0.75rem;
+  color: #6b7280;
+  letter-spacing: 0.05em;
+}

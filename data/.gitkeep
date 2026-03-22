@@ -1,0 +1,3 @@
+# Live Benchmarks Cache
+This directory stores locally cached benchmark audits for competitor comparison.
+Each industry has its own JSON cache file that auto-updates every 24 hours.

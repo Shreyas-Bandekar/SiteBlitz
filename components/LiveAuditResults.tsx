@@ -1,6 +1,7 @@
 "use client";
 
 import type { AuditReport } from "../lib/audit-types";
+import { LiveDataBadges, IndustryBadge, ROISourceBadge } from "./LiveDataBadges";
 import AuditCards from "./AuditCards";
 import CircularScore from "./CircularScore";
 import CompetitorLiveTable from "./CompetitorLiveTable";
@@ -67,7 +68,37 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
         </div>
       </div>
 
-      <ScreenshotCard screenshot={report.screenshot} screenshots={report.screenshots} url={report.url} />
+      {/* Live Data Badges */}
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+        <h3 className="mb-4 text-sm font-semibold text-white/80">LIVE DATA SOURCES</h3>
+        <div className="space-y-3">
+          {/* Live data sources badges */}
+          {(report as any).liveDataSources && (
+            <LiveDataBadges
+              sources={(report as any).liveDataSources?.filter((s: any) => s)}
+              isLive={(report as any).isLive ?? true}
+            />
+          )}
+
+          {/* Industry detection badge */}
+          {(report as any).industry && (
+            <div className="mt-3">
+              <IndustryBadge
+                category={(report as any).industry.category}
+                confidence={(report as any).industry.confidence}
+                method="content analysis"
+              />
+            </div>
+          )}
+
+          {/* ROI source badge */}
+          {(report as any).roiSource && (
+            <div className="mt-3">
+              <ROISourceBadge source={(report as any).roiSource} />
+            </div>
+          )}
+        </div>
+      </div>
       <AuditCards scores={report.scores} industryAverageOverall={competitorAvg ?? undefined} />
       <ScoreRadar scores={report.scores} />
 

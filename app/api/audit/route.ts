@@ -4,7 +4,10 @@ import { extractLiveAnalytics } from "../../../lib/live-analytics";
 import { calculateRealROI } from "../../../lib/roi";
 import { saveLiveAudit, getLiveAuditHistory } from "../../../lib/live-database";
 import { runLiveCompetitorAudits } from "../../../lib/live-competitors";
-import type { StageTraceEntry } from "../../../lib/audit-types";
+import { detectIndustryFromContent, improveIndustryDetectionWithMetrics } from "../../../lib/content-industry";
+import { getLiveBenchmarks } from "../../../lib/live-benchmarks";
+import { calculateLiveROI, getFreeTrafficEstimate } from "../../../lib/free-roi";
+import type { StageTraceEntry, IndustryCategory } from "../../../lib/audit-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -26,26 +29,46 @@ export async function POST(req: Request) {
     );
     stageTrace.push(...(pipelineResult.stageTrace || []));
 
-    const industry = await runRouteStage(stageTrace, auditId, url, "industry-detection", async () =>
-      detectIndustry(pipelineResult.rawHtml || "")
-    );
-    const competitors = flags.enrichCompetitors
-      ? await runRouteStage(stageTrace, auditId, url, "competitors", async () =>
-        await runLiveCompetitorAudits({
-          industry: industry.category,
-          maxConcurrency: 1,
-          trace: stageTrace,
-          runAudit: async (targetUrl) => await runAuditPipeline(targetUrl, { includeAi: false }),
-        })
+    // NEW: Content-based industry detection (no external dependencies)
+    const contentIndustry = await runRouteStage(stageTrace, auditId, url, "industry-detection", async () =>
+      improveIndustryDetectionWithMetrics(
+        pipelineResult.rawHtml || "",
+        pipelineResult.issues.filter(i => i.category === "leadConversion").length,
+        pipelineResult.recommendations.length
       )
+    );
+
+    // NEW: Live benchmarks from local cache + fresh audits
+    const benchmarks = flags.enrichCompetitors
+      ? await runRouteStage(stageTrace, auditId, url, "live-benchmarks", async () =>
+          await getLiveBenchmarks(contentIndustry.category as IndustryCategory)
+        )
       : [];
+
+    const competitors = benchmarks.map(b => ({
+      url: b.url,
+      score: b.overall,
+      audited: b.auditedDate,
+      sourceType: b.sourceType as "live" | "pre-audited"
+    }));
 
     const analytics = await runRouteStage(stageTrace, auditId, url, "analytics", async () =>
       extractLiveAnalytics(pipelineResult.rawHtml || "")
     );
-    const roiOutput = await runRouteStage(stageTrace, auditId, url, "roi", async () =>
-      calculateRealROI(pipelineResult.scores, analytics)
+
+    // NEW: Free ROI calculation using PageSpeed + industry benchmarks
+    const trafficEstimate = await runRouteStage(stageTrace, auditId, url, "traffic-estimate", async () =>
+      getFreeTrafficEstimate(contentIndustry.category as IndustryCategory)
     );
+
+    const roiOutput = await runRouteStage(stageTrace, auditId, url, "roi", async () => {
+      const roi = await calculateLiveROI(
+        pipelineResult.scores,
+        contentIndustry.category as IndustryCategory,
+        trafficEstimate
+      );
+      return { roi, reason: roi ? undefined : "Unable to calculate ROI" };
+    });
 
     let dbStatus: "saved" | "failed" = "saved";
     let dbError: string | null = null;
@@ -54,7 +77,7 @@ export async function POST(req: Request) {
       await runRouteStage(stageTrace, auditId, url, "db", async () => await saveLiveAudit({
         id: auditId,
         url: pipelineResult.url,
-        industry: industry.category,
+        industry: contentIndustry.category,
         scores: pipelineResult.scores,
         issues: pipelineResult.issues,
         recommendations: pipelineResult.recommendations,
@@ -95,13 +118,29 @@ export async function POST(req: Request) {
       ...pipelineResult,
       auditId,
       liveTimestamp: nowIso,
-      pipeline: [...pipelineResult.pipeline, enrichCompetitors ? "live-competitors" : "competitors:skipped", "live-db"],
+      pipeline: [...pipelineResult.pipeline, flags.enrichCompetitors ? "live-benchmarks" : "live-benchmarks:skipped", "traffic-estimate", "live-db"],
       competitors,
+      competitorSources: benchmarks.map(b => ({
+        url: b.url,
+        sourceType: b.sourceType,
+        auditedDate: b.auditedDate
+      })),
       analytics,
       roi: roiOutput.roi,
       roiReason: roiOutput.reason,
+      roiSource: trafficEstimate.dataSource,
+      trafficEstimate,
+      industry: contentIndustry,
       history,
       isLive: true,
+      liveDataSources: [
+        { name: "playwright", timestamp: nowIso, method: "real-time rendering" },
+        { name: "lighthouse", timestamp: nowIso, method: "real-time performance" },
+        { name: "axe-core", timestamp: nowIso, method: "real-time accessibility" },
+        { name: "content-analysis", timestamp: nowIso, method: `${contentIndustry.category} detection (${contentIndustry.confidence}%)` },
+        flags.enrichCompetitors && { name: "live-benchmarks", timestamp: nowIso, method: "competitor cache + audits" },
+        { name: "traffic-estimate", timestamp: nowIso, method: "industry benchmarks" }
+      ].filter(Boolean),
       status: "live-complete",
       dbStatus,
       dbError,
