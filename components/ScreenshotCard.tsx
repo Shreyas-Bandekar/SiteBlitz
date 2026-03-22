@@ -8,6 +8,8 @@ function toImageSrc(input?: string) {
   return `data:image/png;base64,${input}`;
 }
 
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/Card";
+
 export default function ScreenshotCard({
   screenshot,
   screenshots,
@@ -29,42 +31,49 @@ export default function ScreenshotCard({
   const currentSrc = fallbackTab === "desktop" ? desktopSrc : mobileSrc;
 
   return (
-    <article className="glass rounded-2xl border border-white/20 bg-gradient-to-br from-white/15 to-white/5 p-5 transition-transform hover:scale-105">
-      <h3 className="mb-2 text-xl font-bold text-white">Website Analysis</h3>
-      <p className="mb-3 text-sm text-slate-200">Rendered homepage snapshot for quick visual QA.</p>
-      <div className="mb-3 inline-flex rounded-lg border border-white/20 bg-black/20 p-1 text-xs">
-        <button
-          type="button"
-          onClick={() => setTab("desktop")}
-          className={`rounded px-3 py-1 ${fallbackTab === "desktop" ? "bg-white/20 text-white" : "text-slate-300"}`}
-        >
-          Desktop
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("mobile")}
-          className={`rounded px-3 py-1 ${fallbackTab === "mobile" ? "bg-white/20 text-white" : "text-slate-300"}`}
-        >
-          Mobile
-        </button>
-      </div>
-      {hasAny && currentSrc ? (
-        <div className="rounded-xl border border-white/20 bg-black/20 p-3">
-          <img
-            src={currentSrc}
-            alt={`Captured ${fallbackTab} screenshot of ${url}`}
-            className={
-              fallbackTab === "desktop"
-                ? "h-[420px] w-full rounded-lg object-cover object-top"
-                : "mx-auto h-[420px] w-auto max-w-full rounded-lg object-contain"
-            }
-          />
+    <Card className="transition-transform hover:scale-105">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+        <div className="space-y-1">
+          <CardTitle>Website Analysis</CardTitle>
+          <CardDescription>Rendered homepage snapshot for quick visual QA.</CardDescription>
         </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-white/25 p-8 text-center text-sm text-slate-300">
-          Screenshot unavailable (timeout or blocked by site policy).
+        <div className="inline-flex items-center rounded-lg border border-border bg-secondary/30 p-1 text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => setTab("desktop")}
+            className={`rounded-md px-3 py-1 transition-colors ${fallbackTab === "desktop" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"}`}
+          >
+            Desktop
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("mobile")}
+            className={`rounded-md px-3 py-1 transition-colors ${fallbackTab === "mobile" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"}`}
+          >
+            Mobile
+          </button>
         </div>
-      )}
-    </article>
+      </CardHeader>
+      <CardContent>
+        {hasAny && currentSrc ? (
+          <div className="rounded-xl border border-border bg-secondary/10 p-2 shadow-sm">
+            <img
+              src={currentSrc}
+              alt={`Captured ${fallbackTab} screenshot of ${url}`}
+              className={
+                fallbackTab === "desktop"
+                  ? "h-[420px] w-full rounded-lg object-cover object-top border border-border/50"
+                  : "mx-auto h-[420px] w-auto max-w-full rounded-lg object-contain border border-border/50"
+              }
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/10 p-12 text-center">
+            <p className="text-sm font-medium text-foreground">Screenshot unavailable</p>
+            <p className="mt-1 text-xs text-muted-foreground">Timeout or blocked by site policy.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

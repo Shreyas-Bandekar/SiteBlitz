@@ -2,41 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-1: #0b1020;
-  --bg-2: #151c3a;
-  --glass: rgba(255, 255, 255, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.25);
+@layer base {
+  :root {
+    --background: #000000;
+    --foreground: #ededed;
+    --border: #333333;
+    --card: #0a0a0a;
+    --card-foreground: #ededed;
+    --primary: #ededed;
+    --primary-foreground: #000000;
+    --secondary: #27272a;
+    --secondary-foreground: #ededed;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --success: #10b981;
+    --success-foreground: #ffffff;
+    --warning: #f59e0b;
+    --warning-foreground: #ffffff;
+    --radius: 0.5rem;
+  }
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--foreground);
+    background-color: var(--background);
+    font-family:
+      Inter,
+      system-ui,
+      -apple-system,
+      Segoe UI,
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
+  }
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  color: #f8fafc;
-  background:
-    radial-gradient(1200px 600px at -5% -10%, #7c3aed33, transparent 55%),
-    radial-gradient(1000px 500px at 105% 0%, #06b6d433, transparent 52%),
-    linear-gradient(145deg, var(--bg-1), var(--bg-2));
-  font-family:
-    Inter,
-    system-ui,
-    -apple-system,
-    Segoe UI,
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
-}
-
-.glass {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+@layer utilities {
+  .glass-panel {
+    @apply bg-card border border-border shadow-md;
+  }
+  .glass-card {
+    @apply bg-card border border-border shadow-sm hover:border-gray-600 transition-colors;
+  }
 }
 
 .shimmer {
@@ -51,7 +68,7 @@ body {
   background: linear-gradient(
     110deg,
     transparent 20%,
-    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.05) 50%,
     transparent 80%
   );
   transform: translateX(-130%);
@@ -68,15 +85,6 @@ body {
   animation: pop 800ms ease forwards;
 }
 
-.hero-gradient {
-  background: linear-gradient(135deg, #1e1b4b 0%, #3b82f6 50%, #ec4899 100%);
-}
-
-.live-header {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
 @keyframes pop {
   0% {
     transform: scale(0.7);
@@ -90,14 +98,13 @@ body {
 
 /* Live Data Indicators */
 .live-badge {
-  background: linear-gradient(90deg, #ef4444 0%, #22c55e 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--success);
+  color: var(--success-foreground);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .audit-fresh {
-  color: #10b981;
+  color: var(--success);
   font-family: "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", monospace;
   letter-spacing: 0.02em;
 }
@@ -125,6 +132,6 @@ body {
 .live-timer {
   font-family: "SF Mono", "Monaco", monospace;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--muted-foreground);
   letter-spacing: 0.05em;
 }

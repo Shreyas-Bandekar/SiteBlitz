@@ -1,5 +1,7 @@
 "use client";
 
+import { Card, CardContent } from "./ui/Card";
+
 function getGrade(score: number) {
   if (score >= 90) return "A";
   if (score >= 80) return "B";
@@ -9,27 +11,29 @@ function getGrade(score: number) {
 }
 
 function ringColor(score: number) {
-  if (score >= 90) return "border-emerald-300 text-emerald-100";
-  if (score >= 80) return "border-cyan-300 text-cyan-100";
-  if (score >= 70) return "border-amber-300 text-amber-100";
-  if (score >= 60) return "border-orange-300 text-orange-100";
-  return "border-rose-300 text-rose-100";
+  if (score >= 90) return "border-success text-success bg-success/10";
+  if (score >= 80) return "border-success text-success bg-success/10";
+  if (score >= 70) return "border-warning text-warning bg-warning/10";
+  if (score >= 60) return "border-warning text-warning bg-warning/10";
+  return "border-destructive text-destructive bg-destructive/10";
 }
 
 export default function LetterGrade({ score }: { score: number }) {
   const grade = getGrade(score);
   return (
-    <article className="glass rounded-2xl border border-white/20 bg-gradient-to-br from-white/15 to-white/5 p-6">
-      <h2 className="text-xl font-bold text-white">Site Grade</h2>
-      <div className="mt-4 flex items-center gap-6">
-        <div className={`flex h-28 w-28 items-center justify-center rounded-full border-4 ${ringColor(score)}`}>
-          <span className="text-4xl font-black">{grade}</span>
+    <Card className="min-w-fit">
+      <CardContent className="h-full pt-6">
+        <h2 className="text-xl font-bold tracking-tight text-foreground">Site Grade</h2>
+        <div className="mt-4 flex items-center gap-6">
+          <div className={`flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-full border-4 shadow-sm ${ringColor(score)}`}>
+            <span className="text-4xl font-black">{grade}</span>
+          </div>
+          <div>
+            <p className="text-3xl font-black text-foreground">{score}/100</p>
+            <p className="text-xs font-medium text-muted-foreground mt-1 max-w-[140px] leading-relaxed">SEOptimer-style overall quality indicator</p>
+          </div>
         </div>
-        <div>
-          <p className="text-3xl font-black text-white">{score}/100</p>
-          <p className="text-sm text-slate-300">SEOptimer-style overall quality indicator</p>
-        </div>
-      </div>
-    </article>
+      </CardContent>
+    </Card>
   );
 }

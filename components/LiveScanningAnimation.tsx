@@ -1,36 +1,85 @@
 "use client";
 
+import { motion } from "framer-motion";
+import { CheckCircle2, CircleDashed, ServerCog } from "lucide-react";
+import { Card, CardContent } from "./ui/Card";
+
 const stages = [
-  "validate-url",
-  "playwright-desktop",
-  "axe-accessibility",
-  "playwright-mobile",
-  "puppeteer-screenshot",
-  "lighthouse",
-  "report-assembly",
-  "ai:model",
+  "Validating URL & DNS",
+  "Headless Chrome Emulation",
+  "Axe Core Accessibility Pass",
+  "Mobile Device Emulation",
+  "Visual DOM Capture",
+  "Lighthouse Core Scoring",
+  "Report Structure Assembly",
+  "AI Insights & Telemetry",
 ];
 
 export default function LiveScanningAnimation({ active }: { active: number }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-      <h3 className="text-xl font-semibold text-white">Live Pipeline</h3>
-      <div className="mt-4 space-y-3">
-        {stages.map((stage, index) => {
-          const done = index <= active;
-          return (
-            <div key={stage} className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-mono text-white/85">{stage}</span>
-                <span className={done ? "text-emerald-300" : "text-white/40"}>{done ? "done" : "pending"}</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-white/10">
-                <div className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all" style={{ width: done ? "100%" : "10%" }} />
-              </div>
-            </div>
-          );
-        })}
+    <Card className="overflow-hidden shadow-sm">
+      <div className="border-b border-border bg-secondary/30 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <ServerCog className="h-5 w-5 animate-pulse text-primary" />
+          <h3 className="font-semibold tracking-tight text-foreground">Executing Audit Pipeline</h3>
+        </div>
       </div>
-    </div>
+      <CardContent className="p-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {stages.map((stage, index) => {
+            const isCompleted = index < active;
+            const isCurrent = index === active;
+            const isPending = index > active;
+
+            return (
+              <motion.div
+                key={stage}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.05 }}
+                className={`relative flex flex-col justify-between overflow-hidden rounded-md border p-4 transition-all ${
+                  isCompleted
+                    ? "border-success/30 bg-success/10"
+                    : isCurrent
+                      ? "border-primary/50 bg-primary/10 shadow-sm"
+                      : "border-border bg-card"
+                }`}
+              >
+                {isCurrent && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/10 to-primary/0"
+                    animate={{ x: ["-100%", "200%"] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                  />
+                )}
+                
+                <div className="mb-4 flex items-center justify-between">
+                  <span className={`text-xs font-mono font-medium uppercase ${
+                    isCompleted ? "text-success" : isCurrent ? "text-primary" : "text-muted-foreground"
+                  }`}>
+                    {isCompleted ? "DONE" : isCurrent ? "IN PROGRESS" : "PENDING"}
+                  </span>
+                  {isCompleted ? (
+                    <CheckCircle2 className="h-4 w-4 text-success" />
+                  ) : isCurrent ? (
+                    <CircleDashed className="h-4 w-4 animate-spin text-primary" />
+                  ) : null}
+                </div>
+                <div className="text-sm font-medium text-foreground/80">{stage}</div>
+                
+                <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-secondary">
+                  <motion.div
+                    className={`h-full ${isCompleted ? "bg-success" : isCurrent ? "bg-primary" : "bg-transparent"}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: isCompleted ? "100%" : isCurrent ? "70%" : "0%" }}
+                    transition={isCurrent ? { repeat: Infinity, duration: 2 } : { duration: 0.5 }}
+                  />
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
