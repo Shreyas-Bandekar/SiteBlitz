@@ -178,6 +178,8 @@ export type AuditReport = {
     space: number;
   } | null;
   hasCv?: boolean;
+  aiStatus?: "ok" | "failed" | "skipped";
+  cvStatus?: "ok" | "failed" | "skipped";
   disclaimers: string[];
   summary?: string;
   deterministicNotes: string[];

@@ -38,7 +38,12 @@ export async function generateAiInsights(input: AiInput): Promise<AiInsights> {
     const end = raw.lastIndexOf("}");
     if (start < 0 || end <= start) throw new Error("No JSON object returned from model");
     const parsed = JSON.parse(raw.slice(start, end + 1)) as Omit<AiInsights, "source">;
-    if (!parsed.executiveSummary || !Array.isArray(parsed.topFixesFirst) || !Array.isArray(parsed.actionPlan30Days)) {
+    if (
+      typeof parsed.ui_ux_score !== "number" ||
+      typeof parsed.lead_gen_score !== "number" ||
+      !Array.isArray(parsed.issues) ||
+      !Array.isArray(parsed.quick_wins)
+    ) {
       throw new Error("Invalid AI payload shape");
     }
     return { ...parsed, source: "model" };

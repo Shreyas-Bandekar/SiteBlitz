@@ -326,34 +326,44 @@ export async function runAuditPipeline(
 
   let aiInsights;
   let cvResult;
+  let aiStatus: "ok" | "failed" | "skipped" = "skipped";
+  let cvStatus: "ok" | "failed" | "skipped" = "skipped";
   if (options.includeAi !== false) {
-    try {
-      const rawData = {
-        lighthouse: {
-          performance: lighthousePerformance / 100,
-          seo: lighthouseSeo / 100,
-          accessibility: lighthouseAccessibility / 100,
-        },
-        axe: { violations: issues.filter((i) => i.category === "accessibility").length },
-        html: (desktopHtml || mobileHtml).slice(0, 50000), // Safety cut
-        screenshots: screenshots,
-        url,
-      };
+    const rawData = {
+      lighthouse: {
+        performance: lighthousePerformance / 100,
+        seo: lighthouseSeo / 100,
+        accessibility: lighthouseAccessibility / 100,
+      },
+      axe: { violations: issues.filter((i) => i.category === "accessibility").length },
+      html: (desktopHtml || mobileHtml).slice(0, 50000), // Safety cut
+      screenshots: screenshots,
+      url,
+    };
 
-      // Run Gemini AI and Optional CV in parallel
-      const [aiResponse, cvResponse] = await Promise.all([
-        runStageTrace(stageTrace, "ai", async () => await generatePerfectAuditInsights(rawData)),
-        runStageTrace(stageTrace, "cv-analysis", async () => await getCVScore(screenshot))
-      ]);
+    // Run Gemini AI and optional CV independently so one failure does not block the other.
+    const [aiSettled, cvSettled] = await Promise.allSettled([
+      runStageTrace(stageTrace, "ai", async () => await generatePerfectAuditInsights(rawData)),
+      runStageTrace(stageTrace, "cv-analysis", async () => await getCVScore(screenshot))
+    ]);
 
-      aiInsights = { ...aiResponse, source: "model" as const };
-      cvResult = cvResponse;
-    } catch (error) {
-      console.warn("[audit:ai:failed]", error instanceof Error ? error.message : String(error));
-      // Fallback AI insights already handled by lib/ai.ts catch
+    if (aiSettled.status === "fulfilled") {
+      aiInsights = { ...aiSettled.value, source: "model" as const };
+      aiStatus = "ok";
+      pipeline.push("ai:gemini");
+    } else {
+      aiStatus = "failed";
+      console.warn("[audit:ai:failed]", aiSettled.reason instanceof Error ? aiSettled.reason.message : String(aiSettled.reason));
     }
-    pipeline.push("ai:gemini");
-    if (cvResult) pipeline.push("ai:cv-cv2");
+
+    if (cvSettled.status === "fulfilled") {
+      cvResult = cvSettled.value;
+      cvStatus = cvResult ? "ok" : "failed";
+      if (cvResult) pipeline.push("ai:cv-cv2");
+    } else {
+      cvStatus = "failed";
+      console.warn("[audit:cv:failed]", cvSettled.reason instanceof Error ? cvSettled.reason.message : String(cvSettled.reason));
+    }
   }
 
   // Update scores using AI/CV insights if available
@@ -467,6 +477,8 @@ export async function runAuditPipeline(
     quick_wins: aiInsights?.quick_wins,
     cvBreakdown: cvResult?.cv_breakdown,
     hasCv: !!cvResult,
+    aiStatus,
+    cvStatus,
     trustByField,
     scanBlockedOrDegraded,
     disclaimers: [

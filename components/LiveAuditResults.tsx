@@ -136,6 +136,13 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
             </div>
           )}
 
+          {report.aiStatus === "failed" && (
+            <div className="flex items-center gap-2 rounded-xl bg-orange-500/10 p-3 text-xs text-orange-400 border border-orange-500/20 mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <span>AI Analysis in fallback mode. Results are based on deterministic heuristics.</span>
+            </div>
+          )}
+
           <ScreenshotCard screenshot={report.screenshot} screenshots={report.screenshots} url={report.url} />
 
           <Card>
