@@ -1,5 +1,6 @@
 "use client";
 
+import { ActionRoadmap } from "./ActionRoadmap";
 import type { AuditReport } from "../lib/audit-types";
 import { LiveDataBadges, IndustryBadge, ROISourceBadge } from "./LiveDataBadges";
 import { TrustLevelBadge, TrustScoreCard } from "./TrustIndicators";
@@ -58,8 +59,8 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
                   scores: report.scores,
                   issues: report.issues,
                   recommendations: report.recommendations,
-                  summary: report.summary || report.aiInsights?.executiveSummary || "",
-                  aiInsights: report.aiInsights,
+                  summary: report.summary || report.aiInsights?.issues?.[0]?.fix || "",
+                  aiInsights: report.aiInsights as any,
                   detectedIndustry: report.detectedIndustry,
                   competitors: report.competitors?.length
                     ? { topCompetitors: report.competitors.map((c) => ({ name: c.url, overall: c.score })) }
@@ -104,6 +105,36 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
             </div>
             <AuditCards scores={report.scores} industryAverageOverall={competitorAvg ?? undefined} />
           </div>
+
+          {report.hasCv && report.cvBreakdown && (
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-5 shadow-xl shadow-purple-500/20 transition-all hover:scale-[1.01]">
+              <div className="relative z-10 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🖥️</span>
+                    <span className="text-sm font-black tracking-widest text-white uppercase drop-shadow-md">Pixel-Perfect CV Analysis</span>
+                  </div>
+                  <Badge className="bg-white/20 text-white hover:bg-white/30 border-none text-[10px] backdrop-blur-sm">OpenCV Engine</Badge>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {[
+                    { label: 'Contrast', value: report.cvBreakdown.contrast },
+                    { label: 'Layout', value: report.cvBreakdown.layout },
+                    { label: 'Text', value: report.cvBreakdown.typography },
+                    { label: 'Color', value: report.cvBreakdown.color },
+                    { label: 'Space', value: report.cvBreakdown.space }
+                  ].map((stat) => (
+                    <div key={stat.label} className="flex flex-col rounded-lg bg-white/10 p-2 backdrop-blur-md border border-white/10">
+                      <span className="text-[10px] font-bold text-white/70 uppercase leading-none mb-1">{stat.label}</span>
+                      <span className="text-lg font-black text-white leading-none">{stat.value}<span className="text-[10px] font-normal opacity-50 ml-0.5">pts</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
+              <div className="absolute -left-4 -bottom-4 h-24 w-24 rounded-full bg-pink-500/20 blur-2xl" />
+            </div>
+          )}
 
           <ScreenshotCard screenshot={report.screenshot} screenshots={report.screenshots} url={report.url} />
 
@@ -166,6 +197,30 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
               )}
             </CardContent>
           </Card>
+
+          {report.quick_wins?.length ? (
+            <Card className="border-success/20 bg-success/5 shadow-lg shadow-success/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-success uppercase tracking-widest text-xs">
+                  <TrendingUp className="h-4 w-4" />
+                  AI Quick Wins
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {report.quick_wins.map((win, idx) => (
+                    <div key={idx} className="flex flex-col rounded-xl border border-success/30 bg-background/50 p-4 transition-all hover:border-success/60 shadow-sm">
+                      <div className="mb-2 flex items-center justify-between">
+                        <Badge variant="success" className="text-[10px] px-1.5 py-0 h-4">{win.effort}</Badge>
+                        <span className="text-[9px] font-black text-success uppercase leading-none">{win.impact}</span>
+                      </div>
+                      <p className="text-sm font-bold text-foreground leading-tight">{win.action}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         {/* Right Column: AI Insights, Data Sources, Radar */}
@@ -218,6 +273,7 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
           </Card>
         </div>
       </div>
+      <ActionRoadmap quick_wins={report.quick_wins || []} scores={report.scores} />
     </div>
   );
 }

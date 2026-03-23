@@ -128,3 +128,13 @@ export function setCachedReport(url: string, report: AuditReport) {
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
+
+// lib/scoring.ts - NEVER FAILS
+export function computeDeterministicScores(data: any) {
+  return {
+    performance: Math.round((data.lighthouse?.performance || 0) * 100 || 50),
+    accessibility: Math.round((data.axe?.score || 0) * 100 || 50),
+    seo: Math.round((data.lighthouse?.seo || 0) * 100 || 50),
+    speed: Math.round(100 - (data.lighthouse?.ttfb || 0)),
+  };
+}

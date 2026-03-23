@@ -103,10 +103,20 @@ export type TrendsSummary = {
 };
 
 export type AiInsights = {
-  executiveSummary: string;
-  topFixesFirst: Array<{ priority: Severity; fix: string; reason: string; expectedImpact: string }>;
-  businessImpactNarrative: string;
-  actionPlan30Days: Array<{ week: string; focus: string; outcome: string }>;
+  ui_ux_score: number;
+  lead_gen_score: number;
+  issues: Array<{
+    type: string;
+    severity: "low" | "medium" | "high";
+    fix: string;
+    roi: string;
+  }>;
+  quick_wins: Array<{
+    action: string;
+    effort: "5min" | "30min" | "2hr";
+    impact: string;
+    priority: number;
+  }>;
   source: "model";
 };
 
@@ -159,6 +169,15 @@ export type AuditReport = {
   trends: Array<{ date: string; overall: number }>;
   trendsSummary: TrendsSummary;
   aiInsights?: AiInsights;
+  quick_wins?: Array<{ action: string; effort: '5min' | '30min' | '2hr'; impact: string }>;
+  cvBreakdown?: {
+    contrast: number;
+    layout: number;
+    typography: number;
+    color: number;
+    space: number;
+  } | null;
+  hasCv?: boolean;
   disclaimers: string[];
   summary?: string;
   deterministicNotes: string[];

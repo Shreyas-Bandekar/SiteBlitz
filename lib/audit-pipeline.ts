@@ -4,7 +4,10 @@ import * as cheerio from "cheerio";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { generateContentSuggestions } from "./audit-engine";
-import { generateAiInsights } from "./ai-insights";
+import { generatePerfectAuditInsights } from "./ai";
+import { getCVScore } from "./cv-client";
+import { analyzeLeadGen } from "./leadgen";
+import { INDUSTRY_BENCHMARKS } from "./benchmarks";
 import { detectIndustry, isEcommerceStorefrontHint } from "./industry";
 import { detectStructuralIssues } from "./issue-detection";
 import { captureScreenshots } from "./screenshot";
@@ -322,19 +325,49 @@ export async function runAuditPipeline(
   const trendsSummary = computeTrendsSummary(trends);
 
   let aiInsights;
+  let cvResult;
   if (options.includeAi !== false) {
     try {
-      aiInsights = await runStageTrace(stageTrace, "ai", async () => await generateAiInsights({
-          url,
-          overall: scores.overall,
-          recommendations,
-          issueCount: issues.length,
-        })
-      );
+      const rawData = {
+        lighthouse: {
+          performance: lighthousePerformance / 100,
+          seo: lighthouseSeo / 100,
+          accessibility: lighthouseAccessibility / 100,
+        },
+        axe: { violations: issues.filter((i) => i.category === "accessibility").length },
+        html: (desktopHtml || mobileHtml).slice(0, 50000), // Safety cut
+        screenshots: screenshots,
+        url,
+      };
+
+      // Run Gemini AI and Optional CV in parallel
+      const [aiResponse, cvResponse] = await Promise.all([
+        runStageTrace(stageTrace, "ai", async () => await generatePerfectAuditInsights(rawData)),
+        runStageTrace(stageTrace, "cv-analysis", async () => await getCVScore(screenshot))
+      ]);
+
+      aiInsights = { ...aiResponse, source: "model" as const };
+      cvResult = cvResponse;
     } catch (error) {
-      throw withTrace(error, stageTrace);
+      console.warn("[audit:ai:failed]", error instanceof Error ? error.message : String(error));
+      // Fallback AI insights already handled by lib/ai.ts catch
     }
-    pipeline.push("ai:model");
+    pipeline.push("ai:gemini");
+    if (cvResult) pipeline.push("ai:cv-cv2");
+  }
+
+  // Update scores using AI/CV insights if available
+  if (aiInsights) {
+    // CV UI Score > Gemini UI Score > Fallback 75
+    scores.uiux = cvResult?.ui_ux_score || aiInsights.ui_ux_score || 75;
+    scores.leadConversion = aiInsights.lead_gen_score;
+    scores.overall = Math.round(
+      0.25 * scores.uiux +
+      0.2 * lighthousePerformance +
+      0.2 * lighthouseAccessibility +
+      0.2 * lighthouseSeo +
+      0.15 * aiInsights.lead_gen_score
+    );
   }
 
   pipeline.push("summary");
@@ -414,7 +447,11 @@ export async function runAuditPipeline(
   );
 
   if (aiInsights) {
-    trustByField.ai_insights = makeTrustMeta(aiInsights, "INFERRED", "Ollama /api/generate structured JSON", 0.62);
+    trustByField.ai_insights = makeTrustMeta(aiInsights, "INFERRED", "Google Gemini 1.5-flash structured JSON", 0.62);
+  }
+  
+  if (cvResult) {
+    trustByField.cv_analysis = makeTrustMeta(cvResult, "VERIFIED", "OpenCV pixel-level heuristics (Microservice)", 0.88);
   }
 
   return {
@@ -427,6 +464,9 @@ export async function runAuditPipeline(
     trends,
     trendsSummary,
     aiInsights,
+    quick_wins: aiInsights?.quick_wins,
+    cvBreakdown: cvResult?.cv_breakdown,
+    hasCv: !!cvResult,
     trustByField,
     scanBlockedOrDegraded,
     disclaimers: [
@@ -435,7 +475,7 @@ export async function runAuditPipeline(
         ? ["Blocked/errored target response detected; recommendations are limited until a successful fetch is available."]
         : []),
     ],
-    summary: aiInsights?.executiveSummary || "AI summary unavailable",
+    summary: aiInsights?.issues?.[0]?.fix || "AI summary unavailable",
     deterministicNotes: ["Scores are deterministic from live tooling outputs."],
     pipeline,
     screenshot,

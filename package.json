@@ -10,8 +10,10 @@
     "test": "tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.52",
     "@axe-core/playwright": "latest",
     "@vercel/postgres": "^0.10.0",
+    "ai": "^6.0.134",
     "cheerio": "latest",
     "chrome-launcher": "latest",
     "clsx": "^2.1.1",
