@@ -1,50 +1,202 @@
-# SiteBlitz - Live Website Auditor
+# SiteBlitz
 
-SiteBlitz is a production-style Next.js app with:
-- Premium marketing landing page at `/`
-- Strict live audit app at `/audit`
-- Live-only API flow at `/api/audit`
+Live website auditing platform built with Next.js. SiteBlitz scans a target URL in real time, computes deterministic scores, optionally enriches with AI and competitor context, and stores audit history in Postgres.
 
-No sample report buttons, no cached mode, no runtime AI fallback templates.
+## What It Does
 
-## Architecture
+- Runs live audit scans from a browser context (Playwright).
+- Collects accessibility findings (axe-core).
+- Collects Lighthouse category scores.
+- Extracts SEO and UX signals from rendered HTML.
+- Computes deterministic category and overall scores.
+- Estimates ROI using industry benchmark assumptions.
+- Optionally enriches output with Gemini insights.
+- Persists run history in Vercel Postgres.
 
-- `app/(marketing)/page.tsx`: SaaS landing page with hero, features, and live CTA.
-- `app/(audit)/audit/page.tsx`: live scanner UI and results view.
-- `app/api/audit/route.ts`: live endpoint.
-- `lib/audit-pipeline.ts`: Playwright + axe-core + Lighthouse + DOM parsing.
-- `lib/live-analytics.ts`: extracts analytics signals from live page HTML.
-- `lib/live-database.ts`: persists audits to Vercel Postgres.
-- `lib/roi.ts`: computes ROI only from real extracted analytics values.
+## Product Routes
 
-## Live API Flow
+- `/`: Marketing page.
+- `/audit`: Audit UI.
+- `/api/audit`: Main audit API.
+- `/api/ai-insights`: AI-only insights API.
 
-1. Validate URL.
-2. Run live site audit pipeline.
-3. Detect industry from live HTML.
-4. Run 3 live competitor audits.
-5. Extract live analytics signals.
-6. Compute ROI from extracted analytics or return `roi: null` with reason.
-7. Save audit to Postgres.
-8. Return live report payload.
+## Tech Stack
 
-## Environment
+- Next.js App Router + React + TypeScript
+- Tailwind CSS
+- Playwright
+- Lighthouse
+- axe-core
+- Vercel Postgres (`@vercel/postgres`)
+- Gemini integration (`@google/generative-ai`, `@ai-sdk/google`)
+- Optional Flask/OpenCV microservice for visual CV scoring
 
-Create `.env` (or `.env.local`) with:
+## Quick Start
 
-- `GEMINI_API_KEY=AIza...` (single key for Gemini routes)
-- `OLLAMA_HOST=http://127.0.0.1:11434`
-- `OLLAMA_MODEL=qwen2.5:3b-instruct` (or any installed model)
-- `POSTGRES_URL=...` (from Vercel Postgres)
+### 1. Install dependencies
 
-## Commands
+```bash
+npm install
+```
 
-- `npm install`
-- `npm run dev`
-- `npm run build`
-- `npm run test`
+### 2. Install Playwright browsers
 
-## Notes
+```bash
+npx playwright install
+```
 
-- Live-only mode increases failure probability for blocked sites and unavailable AI model/runtime.
-- Competitor stage is strict in API flow.
+### 3. Configure environment
+
+Create `.env.local` in the project root:
+
+```env
+# Gemini (either key works)
+GEMINI_API_KEY=AIza...
+# GOOGLE_API_KEY=AIza...
+
+# Optional local model endpoint
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.1:8b
+
+# Logging
+LOG_LEVEL=info
+
+# Required for persistence/history
+POSTGRES_URL=postgres://...
+
+# Optional Flask CV service
+# FLASK_CV_URL=http://127.0.0.1:5000
+```
+
+### 4. Start development server
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Scripts
+
+- `npm run dev`: Start dev server.
+- `npm run build`: Build production bundle.
+- `npm run start`: Run built app.
+- `npm run lint`: Type-check with TypeScript.
+- `npm run test`: Run Node test suite under `tests/`.
+
+## API Usage
+
+### `POST /api/audit`
+
+Request body:
+
+```json
+{
+	"url": "https://example.com",
+	"enrichCompetitors": false,
+	"enrichAi": false,
+	"strictDb": false
+}
+```
+
+Notes:
+
+- `enrichAi: false` and `enrichCompetitors: false` is the fast path used by the UI toggle.
+- `strictDb: true` makes DB write failures fail the request.
+- Response contains `stageTrace` for debugging failed stages.
+
+Example:
+
+```bash
+curl -X POST http://localhost:3000/api/audit \
+	-H "Content-Type: application/json" \
+	-d '{"url":"https://example.com","enrichAi":true,"enrichCompetitors":true,"strictDb":false}'
+```
+
+### `POST /api/ai-insights`
+
+Request body:
+
+```json
+{
+	"auditData": {
+		"issues": ["Missing meta description"]
+	},
+	"trust": {
+		"trustScore": 72,
+		"grade": "B",
+		"badgeText": "72% TRUST",
+		"factors": ["Live scan", "Deterministic scoring"]
+	}
+}
+```
+
+## Optional Flask CV Service
+
+SiteBlitz can call a small Flask service for screenshot-based visual scoring if `FLASK_CV_URL` is set.
+
+### Run locally
+
+```bash
+cd flask-cv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Service default: `http://127.0.0.1:5000`.
+
+## System Flow
+
+1. Validate request URL.
+2. Run live pipeline (Playwright, Lighthouse, axe, HTML extraction).
+3. Detect industry from content and metrics.
+4. Optionally fetch competitor benchmark context.
+5. Extract live analytics hints from HTML.
+6. Compute ROI estimate using score gap + industry assumptions.
+7. Save report and fetch recent history from Postgres.
+8. Return report payload with scores, issues, trust, and stage trace.
+
+## Repository Structure
+
+- `app/`: App Router pages, layouts, and API routes.
+- `components/`: Dashboard and UI components.
+- `lib/`: Audit pipeline, scoring, AI, trust, ROI, persistence logic.
+- `tests/`: Deterministic and integration-like unit tests.
+- `docs/`: Status and feature documentation.
+- `flask-cv/`: Optional computer-vision service.
+
+## Testing
+
+Run tests:
+
+```bash
+npm run test
+```
+
+The test suite focuses on deterministic scoring behavior, sanitization, trust calculations, AI fallback consistency, and ROI logic.
+
+## Troubleshooting
+
+- Playwright errors:
+	- Run `npx playwright install`.
+	- Ensure system dependencies required by Playwright are installed.
+- Lighthouse timeouts:
+	- Retry the target URL and verify the site is reachable from your machine.
+- DB persistence failures:
+	- Verify `POSTGRES_URL` and network access.
+	- Use `strictDb: false` during local experimentation.
+- AI insights unavailable:
+	- Ensure `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) is valid.
+	- Fast mode skips AI by design.
+
+## Data Confidence Notes
+
+- Core scan metrics are live and deterministic where applicable.
+- Competitor benchmarks may include cached/pre-audited entries.
+- ROI is estimate-driven (industry assumptions), not first-party analytics.
+
+## License
+
+No license file is currently included in this repository.
