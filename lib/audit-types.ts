@@ -146,6 +146,47 @@ export type LiveAuditHistory = {
   timestamp: string;
 };
 
+export type TrustData = {
+  trustScore: number;
+  grade: "A" | "B" | "C";
+  badgeText: string;
+  factors: string[];
+};
+
+export type GeminiInsights = {
+  summary: string;
+  quickWins: string[];
+  trustScore: number;
+  working: boolean;
+  fallback?: string;
+  fallbackReason?: string;
+  sourceMode?: "real" | "fallback" | "skipped";
+  evidenceSnippet?: string[];
+};
+
+export type ManualRoadmap = {
+  summary: string;
+  week1: string[];
+  week2: string[];
+  outcome: string;
+};
+
+export type LeadGenScan = {
+  leadScore: number;
+  status: string;
+  issues: string[];
+  details: string;
+  roi: string;
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type LiveDataSource = {
+  name: string;
+  timestamp: string;
+  method: string;
+};
+
 export type StageTraceEntry = {
   stage: string;
   startedAt: string;
@@ -214,6 +255,8 @@ export type AuditReport = {
       roiImpact: string;
       aboveFoldCta: boolean;
       hasContactForm: boolean;
+      contactFormConfidence?: number;
+      contactFormEvidence?: string[];
     };
     /** Multi-device tap target results */
     deviceResults?: Array<{ device: string; tapTargetsOk: boolean; smallTargets: number }>;
@@ -226,4 +269,20 @@ export type AuditReport = {
     trustBreakdown?: TrustBreakdown;
     /** True when blocked response, degraded fallback, or critical scan gaps */
     scanBlockedOrDegraded?: boolean;
+  trustData?: TrustData;
+  geminiInsights?: GeminiInsights;
+  roadmap?: ManualRoadmap;
+  leadGen?: LeadGenScan;
+  deterministic?: boolean;
+  roiSource?: string;
+  trafficEstimate?: {
+    traffic: number;
+    conversionRate: number;
+    avgOrderValue: number;
+    dataSource: string;
+  };
+  industry?: IndustryDetection;
+  liveDataSources?: LiveDataSource[];
+  dbStatus?: "saved" | "failed";
+  dbError?: string | null;
 };

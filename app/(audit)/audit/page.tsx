@@ -5,8 +5,9 @@ import LiveScanningAnimation from "../../../components/LiveScanningAnimation";
 import LiveAuditResults from "../../../components/LiveAuditResults";
 import DetailedReport from "../../../components/DetailedReport";
 import type { AuditReport } from "../../../lib/audit-types";
-import { Search, Loader2 } from "lucide-react";
+import { Search } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
+import { Badge } from "../../../components/ui/Badge";
 import { ManualModeToggle } from "../../../components/ManualAuditPanel";
 
 type ApiResponse = AuditReport & { error?: string; elapsedMs?: number };
@@ -71,11 +72,11 @@ export default function AuditPage() {
       });
       const json = (await response.json()) as ApiResponse;
       if (!response.ok || json.error) {
-        setStageTrace((json as any).stageTrace || []);
-        setFailedStage((json as any).failedStage || "unknown");
-        throw new Error((json as any).message || json.error || "Live audit failed");
+        setStageTrace(json.stageTrace || []);
+        setFailedStage((json as ApiResponse & { failedStage?: string }).failedStage || "unknown");
+        throw new Error((json as ApiResponse & { message?: string }).message || json.error || "Live audit failed");
       }
-      setStageTrace((json as any).stageTrace || []);
+      setStageTrace(json.stageTrace || []);
       setReport(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Live audit failed");
@@ -151,12 +152,101 @@ export default function AuditPage() {
               <div className="mb-6 flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-5 py-4">
                 <span className="text-lg">🔬</span>
                 <div>
-                  <p className="font-bold text-indigo-300">Advanced Lighthouse + 25 Manual Rules</p>
+                  <p className="font-bold text-indigo-300">25 Manual Rules + Gemini Backup</p>
                   <p className="text-sm text-indigo-200/70">Manual rules caught {report.manualRulesIssues?.length ?? 0} UX issues Lighthouse missed.</p>
                 </div>
               </div>
             )}
             <LiveAuditResults report={report} manualMode={manualMode} />
+            
+            {report.deterministic && (
+              <div className="mt-8 rounded-xl border border-border bg-card p-6">
+                <h3 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2">
+                  <span className="text-blue-500">✨</span> Gemini Pro Analysis
+                </h3>
+                  
+                {report.leadGen?.status === "✅ LEAD GEN HEALTHY" ? (
+                  <div className="flex flex-wrap items-center gap-3 p-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-500/20 mb-6">
+                    <span className="font-bold">✓ {report.leadGen?.details}</span>
+                    <Badge className="ml-auto bg-emerald-500 text-white hover:bg-emerald-600">Lead Score: {report.leadGen?.leadScore}/100</Badge>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 p-4 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded-lg border border-yellow-500/20 mb-6">
+                    <span className="font-bold">{report.leadGen?.status}</span>
+                    <span className="text-sm">{report.leadGen?.issues?.join(", ")}</span>
+                  </div>
+                )}
+
+                {report.trustData && (
+                  <div className="mb-8 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-6">
+                    <h2 className="text-xl font-bold tracking-tight text-indigo-400 flex items-center gap-2 mb-4">
+                      <span>🛡️</span> Trust Score
+                    </h2>
+                    <div className="flex flex-col md:flex-row items-center gap-6">
+                      <div className="flex flex-col items-center justify-center p-6 bg-background rounded-full h-32 w-32 border-4 border-indigo-500 shadow-lg shadow-indigo-500/20">
+                        <span className="text-4xl font-black text-foreground">{report.trustData.trustScore}</span>
+                        <span className="text-xs font-bold text-muted-foreground">/100</span>
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 text-sm">
+                          {report.trustData.badgeText}
+                        </Badge>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {report.trustData.factors.map((f) => (
+                            <div key={f} className="bg-background border border-border p-3 rounded-lg text-sm font-medium text-foreground/80 flex items-center justify-center text-center">
+                              {f}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(report.geminiInsights || report.trustData) && (
+                  <div className="mt-8 p-6 bg-secondary/30 rounded-xl border border-border relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 rounded-l-xl"></div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <h3 className="text-lg font-bold">Gemini Pro Analysis</h3>
+                      <Badge
+                        variant="outline"
+                        className={
+                          report.geminiInsights?.sourceMode === "real"
+                            ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10"
+                            : "border-amber-500/30 text-amber-500 bg-amber-500/10"
+                        }
+                      >
+                        {report.geminiInsights?.sourceMode === "real" ? "Gemini Real" : "Gemini Fallback"}
+                      </Badge>
+                    </div>
+                    <div className="text-base text-foreground/90 font-medium mb-5">
+                      {report.geminiInsights?.summary || `Trust ${report.trustData?.trustScore ?? 0}/100. Manual Mode Active.`}
+                    </div>
+                    {report.geminiInsights?.fallbackReason && (
+                      <p className="mb-4 text-xs text-amber-500">Reason: {report.geminiInsights.fallbackReason}</p>
+                    )}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Recommended Quick Fixes</h4>
+                      <ul className="space-y-2 font-medium">
+                        {(report.geminiInsights?.quickWins ?? ["Add contact form", "Fix tiny fonts", "3x hero CTAs"]).map((w, i) => (
+                          <li key={i} className="flex gap-2 items-start">
+                            <span className="text-green-500 mt-0.5">✓</span>
+                            <span>{w}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-center md:justify-end mt-8">
+                  <Button variant="outline" className="gap-2 h-12 px-6 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:text-blue-500 bg-background transition-all">
+                    📄 Download Manual Report (Powered by Gemini AI)
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="mt-12">
               <DetailedReport report={report} />
             </div>

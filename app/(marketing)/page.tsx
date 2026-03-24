@@ -52,7 +52,7 @@ export default function MarketingPage() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="mb-6 max-w-4xl text-balance text-5xl font-extrabold tracking-tight text-foreground md:text-7xl"
           >
-            AI-Powered Website Audit in Seconds
+            Live Audits + Gemini AI Insights
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
@@ -114,7 +114,7 @@ export default function MarketingPage() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <FeatureCard icon={Smartphone} title="Mobile-First Audit" desc="Real device emulation for tap-targets, responsiveness, and mobile-specific accessibility checks." />
             <FeatureCard icon={Zap} title="Lighthouse Core" desc="Industry standard performance, SEO, and accessibility metrics extracted directly via headless Chrome." />
-            <FeatureCard icon={Sparkles} title="AI Business Insights" desc="Local Ollama explains exactly how technical fixes impact your business metrics in plain English." />
+            <FeatureCard icon={Sparkles} title="Gemini Pro" desc="Gemini AI Insights explains exactly how technical fixes impact your business metrics in plain English." />
             <FeatureCard icon={Search} title="Live DOM Parsing" desc="Extraction of titles, metas, headings, and CTAs right from the target HTML for precise SEO checks." />
             <FeatureCard icon={Layout} title="Visual Sandbox" desc="Full-page desktop and mobile screenshots captured for visual regression and UI/UX evaluation." />
             <FeatureCard icon={BarChart3} title="Audit History" desc="Persisted audits safely stored in PostgreSQL with complete time-stamped delta tracking." />

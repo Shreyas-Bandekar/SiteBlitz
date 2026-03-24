@@ -3,7 +3,6 @@
 import { ActionRoadmap } from "./ActionRoadmap";
 import type { AuditReport } from "../lib/audit-types";
 import { LiveDataBadges, IndustryBadge, ROISourceBadge } from "./LiveDataBadges";
-import { TrustLevelBadge, TrustScoreCard } from "./TrustIndicators";
 import AuditCards from "./AuditCards";
 import CircularScore from "./CircularScore";
 import LetterGrade from "./LetterGrade";
@@ -61,7 +60,7 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
                   issues: report.issues,
                   recommendations: report.recommendations,
                   summary: report.summary || report.aiInsights?.issues?.[0]?.fix || "",
-                  aiInsights: report.aiInsights as any,
+                  aiInsights: report.aiInsights,
                   detectedIndustry: report.detectedIndustry,
                   competitors: report.competitors?.length
                     ? { topCompetitors: report.competitors.map((c) => ({ name: c.url, overall: c.score })) }
@@ -69,7 +68,7 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
                   roi: report.roi || undefined,
                   trendsSummary: report.trendsSummary,
                   pipeline: report.pipeline,
-                  overallTrustScore: report.overallTrustScore,
+                  overallTrustScore: report.trustData?.trustScore ?? report.overallTrustScore,
                   trustBreakdown: report.trustBreakdown,
                   roiTrustMeta: report.trustByField?.roi ?? null,
                   manualRules: report.manualRulesIssues?.length ? {
@@ -83,13 +82,7 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
             </div>
           </CardContent>
         </Card>
-        {report.overallTrustScore != null && report.trustBreakdown ? (
-          <TrustScoreCard
-            overallTrustScore={report.overallTrustScore}
-            trustBreakdown={report.trustBreakdown}
-            scanBlockedOrDegraded={report.scanBlockedOrDegraded}
-          />
-        ) : null}
+        {/* Trust block removed as per SINGLE SOURCE OF TRUTH */}
       </div>
 
       {/* Main Dashboard Grid */}
@@ -100,9 +93,6 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-xl font-semibold tracking-tight text-foreground">Core Diagnostics</h3>
-                {report.trustByField?.deterministic_scores ? (
-                  <TrustLevelBadge level={report.trustByField.deterministic_scores.trustLevel} />
-                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 {report.uxIssuesCount !== undefined && (
@@ -198,21 +188,21 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Telemetry Sources</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-4">
-              {(report as any).liveDataSources && (
+              {report.liveDataSources && (
                 <LiveDataBadges
-                  sources={(report as any).liveDataSources?.filter((s: any) => s)}
-                  isLive={(report as any).isLive ?? true}
+                  sources={report.liveDataSources}
+                  isLive={report.isLive ?? true}
                 />
               )}
-              {(report as any).industry && (
+              {report.industry && (
                 <IndustryBadge
-                  category={(report as any).industry.category}
-                  confidence={(report as any).industry.confidence}
+                  category={report.industry.category}
+                  confidence={report.industry.confidence}
                   method="content analysis"
                 />
               )}
-              {(report as any).roiSource && (
-                <ROISourceBadge source={(report as any).roiSource} />
+              {report.roiSource && (
+                <ROISourceBadge source={report.roiSource} />
               )}
             </CardContent>
           </Card>
@@ -283,9 +273,6 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-sm font-medium text-muted-foreground">Score radar</h3>
-              {report.trustByField?.deterministic_scores ? (
-                <TrustLevelBadge level={report.trustByField.deterministic_scores.trustLevel} />
-              ) : null}
             </div>
             <ScoreRadar scores={report.scores} />
           </div>
@@ -295,9 +282,6 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
               <CardTitle className="flex flex-wrap items-center gap-2 text-lg text-primary">
                 <TrendingUp className="h-5 w-5" />
                 AI Content Insights
-                {report.trustByField?.content_suggestions ? (
-                  <TrustLevelBadge level={report.trustByField.content_suggestions.trustLevel} />
-                ) : null}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">

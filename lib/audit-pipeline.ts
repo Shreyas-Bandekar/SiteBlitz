@@ -197,6 +197,15 @@ export async function runAuditPipeline(
           const leadPage = await mobileCtx2.newPage();
           await leadPage.goto(url, { waitUntil: "domcontentloaded", timeout: MOBILE_TIMEOUT_MS });
           leadGenResult = await analyzeLeadGen({ html: desktopHtml }, leadPage);
+          console.log(
+            "[leadgen:evidence]",
+            JSON.stringify({
+              url,
+              hasContactForm: leadGenResult.hasContactForm,
+              contactFormConfidence: leadGenResult.contactFormConfidence,
+              contactFormEvidence: leadGenResult.contactFormEvidence?.slice(0, 5),
+            })
+          );
           leadGenResult.issues.forEach(msg => {
             issues.push(failIssue("leadConversion", "Lead Gen Heuristic", msg, "medium"));
           });
@@ -241,6 +250,15 @@ export async function runAuditPipeline(
 
     // Fallback HTML-only lead gen analysis
     leadGenResult = await analyzeLeadGen({ html: htmlFallback });
+    console.log(
+      "[leadgen:evidence]",
+      JSON.stringify({
+        url,
+        hasContactForm: leadGenResult.hasContactForm,
+        contactFormConfidence: leadGenResult.contactFormConfidence,
+        contactFormEvidence: leadGenResult.contactFormEvidence?.slice(0, 5),
+      })
+    );
     leadGenResult.issues.forEach(msg => {
       issues.push(failIssue("leadConversion", "Lead Gen Heuristic", msg, "medium"));
     });
@@ -405,6 +423,8 @@ export async function runAuditPipeline(
       html: (desktopHtml || mobileHtml).slice(0, 50000), // Safety cut
       screenshots: screenshots,
       url,
+      issues,
+      leadData: leadGenResult,
     };
 
     // Run Gemini AI and optional CV independently so one failure does not block the other.
@@ -432,31 +452,7 @@ export async function runAuditPipeline(
     }
   }
 
-  // Update scores using AI/CV insights if available
-  const leadGenManualScore = leadGenResult?.score ?? scores.leadConversion;
-  if (aiInsights) {
-    scores.uiux = cvResult?.ui_ux_score || aiInsights.ui_ux_score || 75;
-    scores.leadConversion = Math.round(0.5 * aiInsights.lead_gen_score + 0.5 * leadGenManualScore);
-    scores.overall = Math.round(
-      0.15 * scores.uiux +
-      0.2 * uxScore +
-      0.2 * lighthousePerformance +
-      0.15 * lighthouseAccessibility +
-      0.15 * lighthouseSeo +
-      0.15 * scores.leadConversion
-    );
-  } else {
-    // No AI — use manual lead gen score directly
-    scores.leadConversion = leadGenManualScore;
-    scores.overall = Math.round(
-      0.15 * scores.uiux +
-      0.2 * uxScore +
-      0.2 * lighthousePerformance +
-      0.15 * lighthouseAccessibility +
-      0.15 * lighthouseSeo +
-      0.15 * leadGenManualScore
-    );
-  }
+  // Keep deterministic scores immutable: AI/CV are advisory only.
 
   pipeline.push("summary");
 
@@ -590,6 +586,8 @@ export async function runAuditPipeline(
       roiImpact: leadGenResult.roiImpact,
       aboveFoldCta: leadGenResult.aboveFoldCta,
       hasContactForm: leadGenResult.hasContactForm,
+      contactFormConfidence: leadGenResult.contactFormConfidence,
+      contactFormEvidence: leadGenResult.contactFormEvidence,
     } : undefined,
     deviceResults: deviceResults.length ? deviceResults : undefined,
     manualRulesIssues: [

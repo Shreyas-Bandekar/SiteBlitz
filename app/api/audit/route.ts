@@ -1,13 +1,14 @@
 import { runAuditPipeline } from "../../../lib/audit-pipeline";
-import { detectIndustry } from "../../../lib/industry";
+import { getGeminiInsights } from "../../../lib/gemini-insights";
+import { generateRoadmap } from "../../../lib/manual-roadmap";
+import { calculateTrust } from "../../../lib/trust-calculator";
+import crypto from "crypto";
 import { extractLiveAnalytics } from "../../../lib/live-analytics";
-import { calculateRealROI } from "../../../lib/roi";
 import { saveLiveAudit, getLiveAuditHistory } from "../../../lib/live-database";
-import { runLiveCompetitorAudits } from "../../../lib/live-competitors";
-import { detectIndustryFromContent, improveIndustryDetectionWithMetrics } from "../../../lib/content-industry";
+import { improveIndustryDetectionWithMetrics } from "../../../lib/content-industry";
 import { getLiveBenchmarks } from "../../../lib/live-benchmarks";
 import { calculateLiveROI, getFreeTrafficEstimate } from "../../../lib/free-roi";
-import { makeTrustMeta, calculateOverallTrustScore, calculateTrustBreakdown } from "../../../lib/trust";
+import { makeTrustMeta, calculateTrustBreakdown } from "../../../lib/trust";
 import type { StageTraceEntry, IndustryCategory, TrustMeta } from "../../../lib/audit-types";
 
 export const runtime = "nodejs";
@@ -16,14 +17,17 @@ export const maxDuration = 120;
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const nowIso = new Date().toISOString();
-  const auditId = crypto.randomUUID();
+  let auditId: string = crypto.randomUUID();
   const stageTrace: StageTraceEntry[] = [];
   try {
     const { url, enrichCompetitors, enrichAi, strictDb } = await req.json();
     const flags = resolveEnrichmentFlags({ enrichCompetitors, enrichAi, strictDb });
+    console.log("[audit:enrichment-mode]", JSON.stringify({ url, fastMode: !flags.enrichAi, enrichAi: flags.enrichAi, enrichCompetitors: flags.enrichCompetitors }));
     if (!url || typeof url !== "string") {
       return Response.json({ status: "live-failed", isLive: false, failedStage: "unknown", message: "URL required for live audit", elapsedMs: Date.now() - startedAt, stageTrace }, { status: 400 });
     }
+
+    auditId = crypto.createHash("sha256").update(url).digest("hex");
 
     const pipelineResult = await runRouteStage(stageTrace, auditId, url, "target-audit", async () =>
       await runAuditPipeline(url, { includeAi: flags.enrichAi })
@@ -147,11 +151,64 @@ export async function POST(req: Request) {
     );
 
     const trustValues = Object.values(trustByField);
-    const overallTrustScore = calculateOverallTrustScore(trustValues);
     const trustBreakdown = calculateTrustBreakdown(trustValues);
+
+    const leadScore = pipelineResult.leadGenAnalysis?.score ?? pipelineResult.scores.leadConversion;
+    const uxScore = pipelineResult.uxScore ?? pipelineResult.scores.uiux;
+    const trustData = calculateTrust(leadScore, uxScore, pipelineResult.scores.overall);
+    const overallTrustScore = trustData.trustScore;
+
+    const leadGen = {
+      leadScore,
+      status: leadScore >= 80 ? "✅ LEAD GEN HEALTHY" : "⚠️ LEAD GEN NEEDS WORK",
+      issues: pipelineResult.leadGenAnalysis?.issues ?? [],
+      details:
+        pipelineResult.leadGenAnalysis
+          ? `${pipelineResult.leadGenAnalysis.hasContactForm ? "Contact form present" : "Contact form missing"} · ${pipelineResult.leadGenAnalysis.aboveFoldCta ? "CTA above fold" : "No above-fold CTA"} · confidence ${pipelineResult.leadGenAnalysis.contactFormConfidence ?? 0}%`
+          : "Lead conversion inferred from deterministic audit signals",
+      roi: pipelineResult.leadGenAnalysis?.roiImpact ?? "0",
+      confidence: pipelineResult.leadGenAnalysis?.contactFormConfidence ?? 0,
+      evidence: pipelineResult.leadGenAnalysis?.contactFormEvidence ?? [],
+    };
+
+    const roadmap = generateRoadmap(
+      pipelineResult.manualRulesIssues ?? pipelineResult.issues.map((i) => i.detail),
+      pipelineResult.scores
+    );
+
+    const geminiInsights = flags.enrichAi
+      ? await runRouteStage(stageTrace, auditId, url, "gemini-report", async () =>
+          await getGeminiInsights(
+            {
+              issues: pipelineResult.manualRulesIssues ?? [],
+              recommendations: pipelineResult.recommendations?.map((r) => ({ action: r.action })) ?? [],
+              pipelineScores: pipelineResult.scores,
+              leadGenAnalysis: pipelineResult.leadGenAnalysis,
+              uxScore: pipelineResult.uxScore,
+            },
+            url,
+            trustData
+          )
+        )
+      : {
+          summary: `Trust ${trustData.trustScore}/100. Fast mode skipped AI enrichment.`,
+          quickWins: ["Add contact form", "Fix tiny fonts", "3x hero CTAs"],
+          trustScore: trustData.trustScore,
+          working: true,
+          fallback: "Fast Mode (AI Skipped)",
+          fallbackReason: "fast_mode_skipped",
+          sourceMode: "skipped" as const,
+          evidenceSnippet: pipelineResult.leadGenAnalysis?.contactFormEvidence?.slice(0, 3) ?? [],
+        };
 
     return Response.json({
       ...pipelineResult,
+      uxScore: pipelineResult.uxScore,
+      leadGen,
+      geminiInsights,
+      trustData,
+      roadmap,
+      deterministic: true,
       auditId,
       liveTimestamp: nowIso,
       trustByField,

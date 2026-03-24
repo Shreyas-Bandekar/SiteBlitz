@@ -12,11 +12,12 @@ type Payload = {
   recommendations: Array<{ priority: string; action: string; rationale: string }>;
   summary: string;
   aiInsights?: {
-    executiveSummary: string;
-    topFixesFirst: Array<{ priority: string; fix: string; reason?: string; expectedImpact: string }>;
-    businessImpactNarrative: string;
-    actionPlan30Days: Array<{ week: string; focus: string; outcome: string }>;
-    source: "model";
+    executiveSummary?: string;
+    topFixesFirst?: Array<{ priority: string; fix: string; reason?: string; expectedImpact: string }>;
+    businessImpactNarrative?: string;
+    actionPlan30Days?: Array<{ week: string; focus: string; outcome: string }>;
+    source?: "model";
+    issues?: Array<{ fix: string }>;
   };
   detectedIndustry?: { category: string; confidence: number };
   competitors?: { topCompetitors: Array<{ name: string; overall: number }> } | null;
@@ -102,9 +103,13 @@ function preprocessForPdf(payload: Payload) {
     .slice(0, AI_SUMMARY_MAX);
 
   let trustLine: string | null = null;
-  if (payload.overallTrustScore != null && payload.trustBreakdown) {
-    const b = payload.trustBreakdown;
-    trustLine = `Trust score: ${payload.overallTrustScore}/100 (verified ${b.verified}%, estimated ${b.estimated}%, AI ${b.inferred}%, limited ${b.fallback}%)`;
+  if (payload.overallTrustScore != null) {
+    const fixes = payload.manualRules?.issues?.length ?? 0;
+    trustLine = `Trust ${payload.overallTrustScore}/100${fixes ? ` + ${fixes} fixes` : ""}`;
+    if (payload.trustBreakdown) {
+      const b = payload.trustBreakdown;
+      trustLine += ` (verified ${b.verified}%, estimated ${b.estimated}%, AI ${b.inferred}%, limited ${b.fallback}%)`;
+    }
   }
 
   const diagnostics = `Issues flagged: ${payload.issues.length} · Recommendations: ${payload.recommendations.length}${

@@ -86,6 +86,12 @@ test("enrichment flags default to core-only mode", () => {
   assert.equal(defaults.strictDb, false);
 });
 
+test("fast mode request shape skips heavy Gemini enrichment", () => {
+  const fastFlags = resolveEnrichmentFlags({ enrichAi: false, enrichCompetitors: false, strictDb: false });
+  assert.equal(fastFlags.enrichAi, false);
+  assert.equal(fastFlags.enrichCompetitors, false);
+});
+
 test("blocked-response detector matches CDN/error pages", () => {
   const blockedHtml = `
     <html><head><title>ERROR: The request could not be satisfied</title></head>

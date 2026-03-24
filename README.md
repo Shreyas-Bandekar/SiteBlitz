@@ -32,6 +32,7 @@ No sample report buttons, no cached mode, no runtime AI fallback templates.
 
 Create `.env` (or `.env.local`) with:
 
+- `GEMINI_API_KEY=AIza...` (single key for Gemini routes)
 - `OLLAMA_HOST=http://127.0.0.1:11434`
 - `OLLAMA_MODEL=qwen2.5:3b-instruct` (or any installed model)
 - `POSTGRES_URL=...` (from Vercel Postgres)

@@ -13,6 +13,11 @@ export type AiInsights = {
   source: "model";
 };
 
+type DeterministicEvidence = {
+  hasContactForm: boolean;
+  contactFormConfidence: number;
+};
+
 function fallbackInsights(leadScore: number): AiInsights {
   return {
     ui_ux_score: 75,
@@ -63,10 +68,44 @@ export function sanitizeInsights(insights: AiInsights, url_type: string): AiInsi
   };
 }
 
+export function reconcileInsightsWithEvidence(
+  insights: AiInsights,
+  evidence: DeterministicEvidence
+): AiInsights {
+  if (!evidence.hasContactForm || evidence.contactFormConfidence < 70) return insights;
+  const missingFormRe = /(no contact form|missing contact form|add contact form|no form)/i;
+
+  const issues = insights.issues.map((issue) =>
+    missingFormRe.test(issue.fix)
+      ? { ...issue, fix: "Optimize the existing contact form placement and reduce friction", roi: "+8% form completion rate" }
+      : issue
+  );
+  const quick_wins = insights.quick_wins.map((win) =>
+    missingFormRe.test(win.action)
+      ? { ...win, action: "Improve existing form UX (short fields + strong CTA)" }
+      : win
+  );
+  return { ...insights, issues, quick_wins };
+}
+
 export async function generatePerfectAuditInsights(rawData: any, maxRetries = 3): Promise<AiInsights> {
-  const leadData = await analyzeLeadGen({ html: rawData.html, lighthouse: rawData.lighthouse }, null);
+  const leadData = rawData.leadData ?? (await analyzeLeadGen({ html: rawData.html, lighthouse: rawData.lighthouse }, null));
   const compactData = prepareAuditData({ ...rawData, leadData });
   const dataSize = JSON.stringify(compactData).length;
+  const evidence: DeterministicEvidence = {
+    hasContactForm: Boolean(leadData?.hasContactForm),
+    contactFormConfidence: Number(leadData?.contactFormConfidence ?? 0),
+  };
+  console.log(
+    "[ai:input-summary]",
+    JSON.stringify({
+      url: rawData.url,
+      leadScore: compactData.lead_score,
+      hasContactForm: evidence.hasContactForm,
+      contactFormConfidence: evidence.contactFormConfidence,
+      issueCount: Array.isArray(rawData?.issues) ? rawData.issues.length : 0,
+    })
+  );
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -84,7 +123,9 @@ export async function generatePerfectAuditInsights(rawData: any, maxRetries = 3)
         3. Use service-centric wording: 'service page', 'lead capture', 'consultation CTA', 'portfolio'.
         4. Preserve the title identity in all suggestions.
         5. Lead Gen Elements detected: ${leadData.score}/100.
-        6. Return ONLY valid JSON.
+        6. Hard evidence: contact form present=${evidence.hasContactForm}, confidence=${evidence.contactFormConfidence}%.
+        7. Never claim "no contact form" when hard evidence says contact form is present with confidence >= 70.
+        8. Return ONLY valid JSON.
         
         REQUIRED JSON SCHEMA:
         {
@@ -110,8 +151,9 @@ export async function generatePerfectAuditInsights(rawData: any, maxRetries = 3)
         // Enforce lead_gen_score consistency
         parsed.lead_gen_score = compactData.lead_score;
         
-        // Final Safety Scrubber
+        // Final safety guards to align with deterministic evidence.
         parsed = sanitizeInsights(parsed as AiInsights, compactData.url_type);
+        parsed = reconcileInsightsWithEvidence(parsed as AiInsights, evidence);
         
         logAIAttempt(attempt, dataSize, true, maxRetries);
         return { ...parsed, source: "model" } as AiInsights;
