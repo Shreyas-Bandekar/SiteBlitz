@@ -7,6 +7,7 @@ import { generateContentSuggestions } from "./audit-engine";
 import { generatePerfectAuditInsights } from "./ai";
 import { getCVScore } from "./cv-client";
 import { analyzeLeadGen } from "./leadgen";
+import type { LeadGenResult } from "./leadgen";
 import { INDUSTRY_BENCHMARKS } from "./benchmarks";
 import { detectIndustry, isEcommerceStorefrontHint } from "./industry";
 import { detectStructuralIssues } from "./issue-detection";
@@ -14,6 +15,7 @@ import { captureScreenshots } from "./screenshot";
 import { computeTrendsSummary } from "./trends";
 import { computeScores, prioritizeRecommendations, DETERMINISTIC_SCORES_TRUST_SOURCE } from "./scoring";
 import { makeTrustMeta } from "./trust";
+import { analyzeUIUX } from "./ux-rules";
 import type { AuditReport, Issue, StageTraceEntry, TrustMeta } from "./audit-types";
 
 const execFileAsync = promisify(execFile);
@@ -97,56 +99,114 @@ export async function runAuditPipeline(
   let mobileTapTargets = 0;
   let playwrightFailed = false;
   let lighthouseFailed = false;
+  let uxScore = 100;
+  let uxIssuesCount = 0;
+  let leadGenResult: LeadGenResult | null = null;
+  let deviceResults: Array<{ device: string; tapTargetsOk: boolean; smallTargets: number }> = [];
 
   const [playwrightResult, screenshotResult, lighthouseResult] = await Promise.allSettled([
     runStageTrace(stageTrace, "playwright", async () =>
       withTimeout(async () => {
-      const browser = await chromium.launch({ headless: true });
-      try {
-        const desktopCtx = await browser.newContext();
-        pipeline.push("playwright-desktop");
-        const page = await desktopCtx.newPage();
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: PLAYWRIGHT_DESKTOP_TIMEOUT_MS });
-        desktopHtml = await page.content();
-
-        pipeline.push("axe-accessibility");
+        const browser = await chromium.launch({ headless: true });
         try {
-          const axe = await withTimeout(async () => await new AxeBuilder({ page }).analyze(), AXE_TIMEOUT_MS, "axe");
-          const axeViolations = axe.violations.length;
-          if (axeViolations > 0) {
+          const desktopCtx = await browser.newContext();
+          pipeline.push("playwright-desktop");
+          const page = await desktopCtx.newPage();
+          await page.goto(url, { waitUntil: "domcontentloaded", timeout: PLAYWRIGHT_DESKTOP_TIMEOUT_MS });
+          desktopHtml = await page.content();
+
+          const uxResult = await analyzeUIUX(desktopHtml, page);
+          uxScore = uxResult.uxScore;
+          uxIssuesCount = uxResult.issues.length;
+          uxResult.issues.forEach(msg => {
+            issues.push(failIssue("uiux", "Manual UX Heuristic", msg, "medium"));
+          });
+
+          pipeline.push("axe-accessibility");
+          try {
+            const axe = await withTimeout(async () => await new AxeBuilder({ page }).analyze(), AXE_TIMEOUT_MS, "axe");
+            const axeViolations = axe.violations.length;
+            if (axeViolations > 0) {
+              issues.push(
+                failIssue(
+                  "accessibility",
+                  "Accessibility violations detected",
+                  `axe-core reported ${axeViolations} violation group(s).`,
+                  axeViolations > 10 ? "high" : axeViolations > 3 ? "medium" : "low"
+                )
+              );
+            }
+          } catch (error) {
+            console.warn("[audit:axe:partial-unavailable]", error instanceof Error ? error.message : String(error));
             issues.push(
               failIssue(
                 "accessibility",
-                "Accessibility violations detected",
-                `axe-core reported ${axeViolations} violation group(s).`,
-                axeViolations > 10 ? "high" : axeViolations > 3 ? "medium" : "low"
+                "Accessibility scan partially unavailable",
+                formatAxeFailureDetail(error),
+                "low"
               )
             );
           }
-        } catch (error) {
-          console.warn("[audit:axe:partial-unavailable]", error instanceof Error ? error.message : String(error));
-          issues.push(
-            failIssue(
-              "accessibility",
-              "Accessibility scan partially unavailable",
-              formatAxeFailureDetail(error),
-              "low"
-            )
-          );
-        }
 
-        pipeline.push("playwright-mobile");
-        const mobileCtx = await browser.newContext({ ...devices["iPhone 13"] });
-        const mobilePage = await mobileCtx.newPage();
-        await mobilePage.goto(url, { waitUntil: "domcontentloaded", timeout: MOBILE_TIMEOUT_MS });
-        mobileHtml = await mobilePage.content();
-        mobileTapTargets = await mobilePage.locator("a,button,input[type='button'],input[type='submit']").count();
-        await mobileCtx.close();
-        await desktopCtx.close();
-      } finally {
-        await browser.close();
-      }
-    }, PLAYWRIGHT_DESKTOP_TIMEOUT_MS + AXE_TIMEOUT_MS + MOBILE_TIMEOUT_MS, "playwright")
+          pipeline.push("playwright-mobile");
+
+          // Multi-device tap target checks
+          pipeline.push("multi-device-checks");
+          const mobileDevices = [
+            { name: "Desktop 1440", descriptor: { viewport: { width: 1440, height: 900 }, userAgent: "" } },
+            { name: "iPhone 14",    descriptor: devices["iPhone 14"] },
+            { name: "Galaxy S23",   descriptor: devices["Galaxy S23"] ?? devices["Pixel 5"] },
+          ] as const;
+
+          for (const d of mobileDevices) {
+            try {
+              const dCtx = await browser.newContext(d.descriptor as Parameters<typeof browser.newContext>[0]);
+              const dPage = await dCtx.newPage();
+              await dPage.goto(url, { waitUntil: "domcontentloaded", timeout: MOBILE_TIMEOUT_MS });
+              const tapTargetEls = dPage.locator("a,button,input[type='button'],input[type='submit']");
+              const total = await tapTargetEls.count();
+              // Count small tap targets (bounding box < 44×44 px — WCAG 2.5.5)
+              let smallTargets = 0;
+              for (let i = 0; i < Math.min(total, 30); i++) {
+                try {
+                  const box = await tapTargetEls.nth(i).boundingBox();
+                  if (box && (box.width < 44 || box.height < 44)) smallTargets++;
+                } catch { /* skip unmeasurable */ }
+              }
+              const tapTargetsOk = total >= 3 && smallTargets === 0;
+              deviceResults.push({ device: d.name, tapTargetsOk, smallTargets });
+              if (!tapTargetsOk && d.name !== "Desktop 1440") {
+                issues.push(
+                  failIssue("mobile", `Small tap targets on ${d.name}`,
+                    `${smallTargets} element(s) smaller than 44×44px detected.`, "medium")
+                );
+              }
+              if (d.name === "iPhone 14") {
+                mobileHtml = await dPage.content();
+                mobileTapTargets = total;
+              }
+              await dCtx.close();
+            } catch (devErr) {
+              console.warn(`[audit:device:${d.name}]`, devErr instanceof Error ? devErr.message : String(devErr));
+            }
+          }
+
+          // Lead Gen analysis (with live page access for above-fold CTA check)
+          pipeline.push("leadgen-analysis");
+          const mobileCtx2 = await browser.newContext({ ...devices["iPhone 13"] });
+          const leadPage = await mobileCtx2.newPage();
+          await leadPage.goto(url, { waitUntil: "domcontentloaded", timeout: MOBILE_TIMEOUT_MS });
+          leadGenResult = await analyzeLeadGen({ html: desktopHtml }, leadPage);
+          leadGenResult.issues.forEach(msg => {
+            issues.push(failIssue("leadConversion", "Lead Gen Heuristic", msg, "medium"));
+          });
+          await mobileCtx2.close();
+
+          await desktopCtx.close();
+        } finally {
+          await browser.close();
+        }
+      }, PLAYWRIGHT_DESKTOP_TIMEOUT_MS + AXE_TIMEOUT_MS + MOBILE_TIMEOUT_MS, "playwright")
     ),
     runStageTrace(stageTrace, "screenshot", async () => withTimeout(async () => {
       pipeline.push("puppeteer-screenshot");
@@ -178,6 +238,12 @@ export async function runAuditPipeline(
     desktopHtml = htmlFallback;
     mobileHtml = htmlFallback;
     mobileTapTargets = 0;
+
+    // Fallback HTML-only lead gen analysis
+    leadGenResult = await analyzeLeadGen({ html: htmlFallback });
+    leadGenResult.issues.forEach(msg => {
+      issues.push(failIssue("leadConversion", "Lead Gen Heuristic", msg, "medium"));
+    });
   }
 
   if (screenshotResult.status === "rejected") {
@@ -367,16 +433,28 @@ export async function runAuditPipeline(
   }
 
   // Update scores using AI/CV insights if available
+  const leadGenManualScore = leadGenResult?.score ?? scores.leadConversion;
   if (aiInsights) {
-    // CV UI Score > Gemini UI Score > Fallback 75
     scores.uiux = cvResult?.ui_ux_score || aiInsights.ui_ux_score || 75;
-    scores.leadConversion = aiInsights.lead_gen_score;
+    scores.leadConversion = Math.round(0.5 * aiInsights.lead_gen_score + 0.5 * leadGenManualScore);
     scores.overall = Math.round(
-      0.25 * scores.uiux +
+      0.15 * scores.uiux +
+      0.2 * uxScore +
       0.2 * lighthousePerformance +
-      0.2 * lighthouseAccessibility +
-      0.2 * lighthouseSeo +
-      0.15 * aiInsights.lead_gen_score
+      0.15 * lighthouseAccessibility +
+      0.15 * lighthouseSeo +
+      0.15 * scores.leadConversion
+    );
+  } else {
+    // No AI — use manual lead gen score directly
+    scores.leadConversion = leadGenManualScore;
+    scores.overall = Math.round(
+      0.15 * scores.uiux +
+      0.2 * uxScore +
+      0.2 * lighthousePerformance +
+      0.15 * lighthouseAccessibility +
+      0.15 * lighthouseSeo +
+      0.15 * leadGenManualScore
     );
   }
 
@@ -459,7 +537,7 @@ export async function runAuditPipeline(
   if (aiInsights) {
     trustByField.ai_insights = makeTrustMeta(aiInsights, "INFERRED", "Google Gemini 1.5-flash structured JSON", 0.62);
   }
-  
+
   if (cvResult) {
     trustByField.cv_analysis = makeTrustMeta(cvResult, "VERIFIED", "OpenCV pixel-level heuristics (Microservice)", 0.88);
   }
@@ -504,6 +582,20 @@ export async function runAuditPipeline(
       description: metaText || "",
       url,
     },
+    uxScore,
+    uxIssuesCount,
+    leadGenAnalysis: leadGenResult ? {
+      score: leadGenResult.score,
+      issues: leadGenResult.issues,
+      roiImpact: leadGenResult.roiImpact,
+      aboveFoldCta: leadGenResult.aboveFoldCta,
+      hasContactForm: leadGenResult.hasContactForm,
+    } : undefined,
+    deviceResults: deviceResults.length ? deviceResults : undefined,
+    manualRulesIssues: [
+      ...(uxIssuesCount > 0 ? issues.filter(i => i.title === "Manual UX Heuristic").map(i => i.detail) : []),
+      ...(leadGenResult?.issues ?? []),
+    ],
     rawHtml: desktopHtml || mobileHtml,
     stageTrace,
   };

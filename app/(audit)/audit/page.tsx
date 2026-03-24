@@ -7,6 +7,7 @@ import DetailedReport from "../../../components/DetailedReport";
 import type { AuditReport } from "../../../lib/audit-types";
 import { Search, Loader2 } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
+import { ManualModeToggle } from "../../../components/ManualAuditPanel";
 
 type ApiResponse = AuditReport & { error?: string; elapsedMs?: number };
 
@@ -20,6 +21,7 @@ export default function AuditPage() {
   const [failedStage, setFailedStage] = useState("");
   const [stageTrace, setStageTrace] = useState<Array<{ stage: string; status: string }>>([]);
   const [fastMode, setFastMode] = useState(true);
+  const [manualMode, setManualMode] = useState(false);
   const autoStartedRef = useRef(false);
 
   useEffect(() => {
@@ -111,10 +113,13 @@ export default function AuditPage() {
               <p className="mt-1 text-sm text-muted-foreground">Enter a target URL to begin live data extraction.</p>
             </div>
             
-            <label className="mt-4 md:mt-0 flex items-center justify-center gap-2 text-sm text-foreground bg-secondary px-4 py-2 rounded-md border border-border cursor-pointer hover:bg-secondary/80 transition">
-              <input type="checkbox" checked={fastMode} onChange={(e) => setFastMode(e.target.checked)} className="accent-foreground h-4 w-4" />
-              Fast Core Validation
-            </label>
+            <div className="mt-4 md:mt-0 flex flex-wrap items-center gap-2">
+              <label className="flex items-center justify-center gap-2 text-sm text-foreground bg-secondary px-4 py-2 rounded-md border border-border cursor-pointer hover:bg-secondary/80 transition">
+                <input type="checkbox" checked={fastMode} onChange={(e) => setFastMode(e.target.checked)} className="accent-foreground h-4 w-4" />
+                Fast Core Validation
+              </label>
+              <ManualModeToggle manualMode={manualMode} onToggle={setManualMode} />
+            </div>
           </div>
 
           <form onSubmit={onSubmit} className="relative mt-6 flex w-full max-w-4xl flex-col gap-3 sm:flex-row">
@@ -142,7 +147,16 @@ export default function AuditPage() {
         
         {report && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <LiveAuditResults report={report} />
+            {manualMode && (
+              <div className="mb-6 flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-5 py-4">
+                <span className="text-lg">🔬</span>
+                <div>
+                  <p className="font-bold text-indigo-300">Advanced Lighthouse + 25 Manual Rules</p>
+                  <p className="text-sm text-indigo-200/70">Manual rules caught {report.manualRulesIssues?.length ?? 0} UX issues Lighthouse missed.</p>
+                </div>
+              </div>
+            )}
+            <LiveAuditResults report={report} manualMode={manualMode} />
             <div className="mt-12">
               <DetailedReport report={report} />
             </div>

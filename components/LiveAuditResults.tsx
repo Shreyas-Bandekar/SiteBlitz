@@ -13,8 +13,9 @@ import ScreenshotCard from "./ScreenshotCard";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
 import { Badge } from "./ui/Badge";
 import { Target, TrendingUp, AlertTriangle } from "lucide-react";
+import { ScoreTable } from "./ManualAuditPanel";
 
-export default function LiveAuditResults({ report }: { report: AuditReport }) {
+export default function LiveAuditResults({ report, manualMode = false }: { report: AuditReport; manualMode?: boolean }) {
   const sortedRecommendations = [...(report.recommendations || [])].sort((a, b) => {
     const rank = { high: 3, medium: 2, low: 1 };
     return rank[b.priority] - rank[a.priority];
@@ -71,6 +72,12 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
                   overallTrustScore: report.overallTrustScore,
                   trustBreakdown: report.trustBreakdown,
                   roiTrustMeta: report.trustByField?.roi ?? null,
+                  manualRules: report.manualRulesIssues?.length ? {
+                    uxScore: report.uxScore,
+                    leadScore: report.leadGenAnalysis?.score,
+                    issues: report.manualRulesIssues,
+                    roiImpact: report.leadGenAnalysis?.roiImpact,
+                  } : undefined,
                 }}
               />
             </div>
@@ -97,7 +104,12 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
                   <TrustLevelBadge level={report.trustByField.deterministic_scores.trustLevel} />
                 ) : null}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {report.uxIssuesCount !== undefined && (
+                  <Badge variant="outline" className="border-indigo-500/50 text-indigo-500 bg-indigo-500/5">
+                    Manual UX Rules: {report.uxIssuesCount} issues found
+                  </Badge>
+                )}
                 <Badge variant="destructive">{counts.high} High</Badge>
                 <Badge variant="warning">{counts.medium} Med</Badge>
                 <Badge variant="success">{counts.low} Low</Badge>
@@ -105,6 +117,42 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
             </div>
             <AuditCards scores={report.scores} industryAverageOverall={competitorAvg ?? undefined} />
           </div>
+
+          {/* Manual Mode: Lead Gen Score card + ScoreTable */}
+          {manualMode && (
+            <>
+              {report.leadGenAnalysis && (
+                <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950 via-teal-950 to-emerald-950 p-5 shadow-xl shadow-emerald-500/10">
+                  <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="flex-1">
+                      <p className="text-xs font-black tracking-widest text-emerald-400 uppercase mb-1">Lead Gen Score</p>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-5xl font-black text-white">{report.leadGenAnalysis.score}</span>
+                        <span className="text-lg text-emerald-400/70">/100</span>
+                      </div>
+                      <p className="mt-1 text-sm text-emerald-200/60">
+                        {report.leadGenAnalysis.aboveFoldCta ? "✓ CTA above fold" : "✗ No above-fold CTA"} ·{" "}
+                        {report.leadGenAnalysis.hasContactForm ? "✓ Contact form" : "✗ No contact form"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-center">
+                      <p className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">Fix → ROI Gain</p>
+                      <p className="text-2xl font-black text-white mt-1">{report.leadGenAnalysis.roiImpact}</p>
+                      <p className="text-[10px] text-emerald-400/60">/month potential</p>
+                    </div>
+                  </div>
+                  <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl" />
+                </div>
+              )}
+              <ScoreTable
+                uxIssues={report.manualRulesIssues?.filter((_, i) => i < (report.uxIssuesCount ?? 0)) ?? []}
+                leadIssues={report.leadGenAnalysis?.issues ?? []}
+                deviceResults={report.deviceResults}
+                uxScore={report.uxScore}
+                leadScore={report.leadGenAnalysis?.score}
+              />
+            </>
+          )}
 
           {report.hasCv && report.cvBreakdown && (
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-5 shadow-xl shadow-purple-500/20 transition-all hover:scale-[1.01]">
@@ -180,8 +228,8 @@ export default function LiveAuditResults({ report }: { report: AuditReport }) {
             <CardContent>
               {sortedRecommendations.length ? (
                 <div className="grid gap-4 md:grid-cols-2">
-                  {sortedRecommendations.map((item) => (
-                    <div key={`${item.category}-${item.action}`} className="flex flex-col rounded-xl border border-border bg-secondary/20 p-4 transition-colors hover:bg-secondary/40">
+                  {sortedRecommendations.map((item, idx) => (
+                    <div key={`${item.category}-${item.action}-${idx}`} className="flex flex-col rounded-xl border border-border bg-secondary/20 p-4 transition-colors hover:bg-secondary/40">
                       <div className="mb-3 flex items-center justify-between">
                         <Badge variant={item.priority === 'high' ? 'destructive' : item.priority === 'medium' ? 'warning' : 'success'}>
                           {item.priority.toUpperCase()}

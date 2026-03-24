@@ -64,7 +64,7 @@ export function sanitizeInsights(insights: AiInsights, url_type: string): AiInsi
 }
 
 export async function generatePerfectAuditInsights(rawData: any, maxRetries = 3): Promise<AiInsights> {
-  const leadData = analyzeLeadGen({ html: rawData.html, lighthouse: rawData.lighthouse });
+  const leadData = await analyzeLeadGen({ html: rawData.html, lighthouse: rawData.lighthouse }, null);
   const compactData = prepareAuditData({ ...rawData, leadData });
   const dataSize = JSON.stringify(compactData).length;
 

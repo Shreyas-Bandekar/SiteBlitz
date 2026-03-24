@@ -205,11 +205,25 @@ export type AuditReport = {
     description: string;
     url: string;
   };
-  /** Per-artifact trust labels (additive; optional for older clients). */
-  trustByField?: Record<string, TrustMeta>;
-  /** 0–100 aggregate trust score */
-  overallTrustScore?: number;
-  trustBreakdown?: TrustBreakdown;
-  /** True when blocked response, degraded fallback, or critical scan gaps */
-  scanBlockedOrDegraded?: boolean;
+    uxScore?: number;
+    uxIssuesCount?: number;
+    /** Lead gen rule-based analysis result */
+    leadGenAnalysis?: {
+      score: number;
+      issues: string[];
+      roiImpact: string;
+      aboveFoldCta: boolean;
+      hasContactForm: boolean;
+    };
+    /** Multi-device tap target results */
+    deviceResults?: Array<{ device: string; tapTargetsOk: boolean; smallTargets: number }>;
+    /** All manual rule issues combined (UX + Lead Gen) */
+    manualRulesIssues?: string[];
+    /** Per-artifact trust labels (additive; optional for older clients). */
+    trustByField?: Record<string, TrustMeta>;
+    /** 0–100 aggregate trust score */
+    overallTrustScore?: number;
+    trustBreakdown?: TrustBreakdown;
+    /** True when blocked response, degraded fallback, or critical scan gaps */
+    scanBlockedOrDegraded?: boolean;
 };

@@ -34,6 +34,12 @@ type Payload = {
   overallTrustScore?: number;
   trustBreakdown?: TrustBreakdown;
   roiTrustMeta?: TrustMeta | null;
+  manualRules?: {
+    uxScore?: number;
+    leadScore?: number;
+    issues: string[];
+    roiImpact?: string;
+  };
 };
 
 const MARGIN = 48;
@@ -499,6 +505,81 @@ export default function PDFReport({ payload }: { payload: Payload }) {
           doc.text(line, MARGIN, ctx.y);
           ctx.y += LINE;
         }
+      }
+
+      // --- Manual Audit Report section ---
+      if (payload.manualRules && payload.manualRules.issues.length > 0) {
+        doc.addPage();
+        ctx.y = MARGIN;
+
+        // Bold header banner
+        doc.setFillColor(30, 27, 75); // deep indigo
+        doc.rect(MARGIN, ctx.y, textW, 42, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(200, 195, 255);
+        doc.text("MANUAL AUDIT REPORT", MARGIN + 14, ctx.y + 28);
+        ctx.y += 56;
+
+        // Scores row
+        setBody();
+        doc.setFontSize(10);
+        doc.setTextColor(48, 48, 58);
+        const scoreRow = [
+          payload.manualRules.uxScore != null ? `UX Score: ${payload.manualRules.uxScore}/100` : null,
+          payload.manualRules.leadScore != null ? `Lead Gen Score: ${payload.manualRules.leadScore}/100` : null,
+          `Issues detected: ${payload.manualRules.issues.length}`,
+          payload.manualRules.roiImpact ? `Potential ROI gain: ${payload.manualRules.roiImpact}/mo` : null,
+        ].filter(Boolean).join("  ·  ");
+        for (const line of doc.splitTextToSize(scoreRow, textW)) {
+          ensure(LINE);
+          doc.text(line, MARGIN, ctx.y);
+          ctx.y += LINE;
+        }
+        ctx.y += 8;
+
+        // Rule breakdown table
+        setHeading();
+        doc.setFontSize(11);
+        ensure(22);
+        doc.text("Manual Rule Violations", MARGIN, ctx.y);
+        ctx.y += 14;
+
+        const colSource = 90;
+        const colDetail = textW - colSource;
+
+        // Header row
+        doc.setFillColor(241, 244, 250);
+        doc.rect(MARGIN, ctx.y - 4, textW, 20, "F");
+        doc.setFontSize(9);
+        doc.setTextColor(30, 30, 36);
+        doc.text("Source", MARGIN + 6, ctx.y + 10);
+        doc.text("Issue", MARGIN + colSource + 6, ctx.y + 10);
+        ctx.y += 22;
+
+        doc.setFont("helvetica", "normal");
+        const manualIssues = payload.manualRules.issues.slice(0, 20);
+        const uxCount = payload.manualRules.uxScore != null ? 3 : 0;
+        manualIssues.forEach((issue, idx) => {
+          const source = idx < uxCount ? "UX Rules" : "Lead Gen";
+          const lines = doc.splitTextToSize(issue, colDetail - 12);
+          const rowH = Math.max(20, lines.length * 12);
+          ensure(rowH + 4);
+          if (idx % 2 === 0) {
+            doc.setFillColor(250, 250, 255);
+            doc.rect(MARGIN, ctx.y - 3, textW, rowH, "F");
+          }
+          doc.setTextColor(80, 80, 160);
+          doc.setFontSize(8);
+          doc.text(source, MARGIN + 6, ctx.y + 10);
+          doc.setTextColor(40, 40, 48);
+          doc.setFontSize(9);
+          lines.forEach((line: string, li: number) => {
+            doc.text(line, MARGIN + colSource + 6, ctx.y + 10 + li * 11);
+          });
+          ctx.y += rowH;
+        });
+        ctx.y += 8;
       }
 
       addPageFooters(doc, MARGIN);
