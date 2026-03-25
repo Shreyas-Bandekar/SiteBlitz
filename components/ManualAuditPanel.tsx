@@ -28,7 +28,7 @@ export function ScoreTable({ uxIssues, leadIssues, deviceResults, uxScore, leadS
         <Badge variant="outline" className="border-indigo-400/40 text-indigo-400 text-[10px] ml-auto">
           No AI Dependency
         </Badge>
-        <Badge variant="secondary">Gemini AI + 25 Manual Rules</Badge>
+        <Badge variant="secondary">Groq AI + 25 Manual Rules</Badge>
       </div>
 
       {/* Score summary row */}

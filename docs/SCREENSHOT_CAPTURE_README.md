@@ -1,6 +1,7 @@
 # Screenshot Capture Changes (Full-Page + Auto-Scroll)
 
 ## Overview
+
 This document explains the screenshot pipeline updates made to improve visual auditing.
 
 Previous behavior captured only the visible viewport and often looked incomplete for long pages.
@@ -9,6 +10,7 @@ Current behavior captures the full page height after a warm-up scroll pass.
 ## What Changed
 
 ### 1) Full-page capture enabled
+
 File: `lib/screenshot.ts`
 
 - Desktop screenshot now uses `fullPage: true`.
@@ -17,6 +19,7 @@ File: `lib/screenshot.ts`
 This captures the entire rendered page instead of only the first screen.
 
 ### 2) Auto-scroll warm-up before capture
+
 File: `lib/screenshot.ts`
 
 - Added `warmupScroll(page)`.
@@ -26,6 +29,7 @@ File: `lib/screenshot.ts`
 This improves capture quality for pages that render content only after scroll.
 
 ### 3) Viewer updated to avoid cropping
+
 File: `components/ScreenshotCard.tsx`
 
 - Replaced fixed-height cropped display with a scrollable preview container.
@@ -35,6 +39,7 @@ File: `components/ScreenshotCard.tsx`
 This ensures full-page screenshots are viewable end-to-end in the UI.
 
 ### 4) UI copy updated
+
 File: `components/ScreenshotCard.tsx`
 
 - Card description now states:

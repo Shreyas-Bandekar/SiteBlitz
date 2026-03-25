@@ -1,20 +1,43 @@
-import { hashOneTimeToken } from "../../../../lib/auth-server";
-import { verifyEmailByToken } from "../../../../lib/live-database";
+import { z } from "zod";
+import { verifyAuthUserEmailByTokenHash } from "../../../../lib/auth/db";
+import { hashToken } from "../../../../lib/auth/token";
 
-export async function GET(req: Request) {
-  const requestUrl = new URL(req.url);
-  const token = requestUrl.searchParams.get("token")?.trim() || "";
-  if (!token) {
-    return Response.json({ error: "Token is required" }, { status: 400 });
+const verifyEmailSchema = z.object({
+  token: z.string().min(32).max(256),
+});
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  try {
+    const parsed = verifyEmailSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return Response.json(
+        { error: "Invalid verification token" },
+        { status: 400 },
+      );
+    }
+
+    const tokenHash = hashToken(parsed.data.token);
+    const user = await verifyAuthUserEmailByTokenHash(tokenHash);
+    if (!user) {
+      return Response.json(
+        { error: "Invalid or expired verification token" },
+        { status: 400 },
+      );
+    }
+
+    return Response.json({
+      message: "Email verified successfully",
+      user: {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.email_verified,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Email verification failed";
+    return Response.json({ error: message }, { status: 500 });
   }
-
-  const user = await verifyEmailByToken(hashOneTimeToken(token));
-  if (!user) {
-    return Response.json(
-      { error: "Token is invalid or expired" },
-      { status: 400 },
-    );
-  }
-
-  return Response.json({ ok: true, message: "Email verified successfully" });
 }

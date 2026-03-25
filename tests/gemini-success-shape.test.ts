@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractQuickWins } from "../lib/gemini-insights";
+import { extractQuickWins } from "../lib/groq-insights";
 
-test("Gemini success parser returns non-generic site-specific quick wins shape", () => {
+test("Groq success parser returns non-generic site-specific quick wins shape", () => {
   const text = `
   Executive Summary: Homepage has strong SEO but form CTA visibility is weak.
   - Move "Book Demo" CTA above fold on services hero

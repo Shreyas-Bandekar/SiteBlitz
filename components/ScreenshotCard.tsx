@@ -67,7 +67,7 @@ export default function ScreenshotCard({
   };
 
   return (
-    <Card className="transition-transform hover:scale-105">
+    <Card>
       <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-0 gap-4 sm:gap-0 pb-4">
         <div className="space-y-1">
           <CardTitle>Website Analysis</CardTitle>
@@ -106,16 +106,18 @@ export default function ScreenshotCard({
           />
         ) : activeOk && activeSrc ? (
           <div className="rounded-xl border border-border bg-secondary/10 p-2 shadow-sm">
-            <div className="max-h-[560px] overflow-auto rounded-lg border border-border/40 bg-background">
+            <div className="max-h-[70vh] overflow-auto rounded-lg border border-border/40 bg-background">
               <img
                 key={`${fallbackTab}-${activeSrc.length}`}
                 src={activeSrc}
                 alt={`Captured ${fallbackTab} screenshot of ${url}`}
                 onError={handleImageError}
+                loading="lazy"
+                decoding="async"
                 className={
                   fallbackTab === "desktop"
-                    ? "h-auto w-full object-contain object-top"
-                    : "mx-auto h-auto w-full max-w-[420px] object-contain"
+                    ? "block h-auto w-full object-contain object-top"
+                    : "mx-auto block h-auto w-full max-w-[420px] object-contain"
                 }
               />
             </div>

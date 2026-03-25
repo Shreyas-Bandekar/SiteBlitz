@@ -6,9 +6,19 @@ const DESKTOP_UA =
 const MOBILE_UA =
   "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 
-async function preparePage(page: import("puppeteer").Page, userAgent: string) {
+type ScreenshotOptions = {
+  navTimeoutMs?: number;
+  settleMs?: number;
+  includeMobile?: boolean;
+};
+
+async function preparePage(
+  page: import("puppeteer").Page,
+  userAgent: string,
+  navTimeoutMs: number,
+) {
   await page.setUserAgent(userAgent);
-  await page.setDefaultNavigationTimeout(SCREENSHOT_NAV_TIMEOUT_MS + 15000);
+  await page.setDefaultNavigationTimeout(navTimeoutMs + 15000);
   await page.setExtraHTTPHeaders({
     "Accept-Language": "en-US,en;q=0.9",
     Accept:
@@ -17,54 +27,80 @@ async function preparePage(page: import("puppeteer").Page, userAgent: string) {
   });
 }
 
-async function safeGoto(page: import("puppeteer").Page, url: string) {
+async function safeGoto(
+  page: import("puppeteer").Page,
+  url: string,
+  navTimeoutMs: number,
+  settleMs: number,
+) {
   try {
-    await page.goto(url, {
-      waitUntil: "networkidle0",
-      timeout: SCREENSHOT_NAV_TIMEOUT_MS,
-    });
+    // Use networkidle2 instead of networkidle0 so tracking pixels don't cause timeouts
+    await page.goto(url, { waitUntil: "networkidle2", timeout: navTimeoutMs });
   } catch {
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: SCREENSHOT_NAV_TIMEOUT_MS + 15000,
-    });
+    // Keep fallback bounded so fast mode does not exceed API budget.
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 5000 });
+    } catch (err) {
+      console.warn("[screenshot:safeGoto:fallback]", String(err));
+    }
   }
   // Let client-side render, images, and fonts settle before screenshot
-  await new Promise((r) => setTimeout(r, POST_LOAD_SETTLE_MS));
+  await new Promise((r) => setTimeout(r, settleMs));
 }
 
-/**
- * Scroll through the page once so lazy-loaded sections/images render,
- * then return to top before final full-page capture.
- */
-async function warmupScroll(page: import("puppeteer").Page) {
+async function warmupLazyContent(page: import("puppeteer").Page) {
+  // Scroll down/up once so lazy-loaded sections and images are hydrated before full-page capture.
   await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      let total = 0;
-      const distance = Math.max(300, Math.floor(window.innerHeight * 0.8));
-      const timer = window.setInterval(() => {
-        const maxScroll = document.body.scrollHeight - window.innerHeight;
-        window.scrollBy(0, distance);
-        total += distance;
-        if (
-          total >= maxScroll ||
-          window.scrollY + window.innerHeight >= document.body.scrollHeight
-        ) {
-          window.clearInterval(timer);
-          resolve();
-        }
-      }, 120);
-    });
-    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    const total = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight,
+    );
+    const step = Math.max(500, Math.floor(window.innerHeight * 0.8));
+    for (let y = 0; y < total; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+    window.scrollTo(0, 0);
   });
-  await new Promise((r) => setTimeout(r, 600));
 }
 
-export async function captureScreenshots(url: string) {
+async function tryCapture(
+  page: import("puppeteer").Page,
+  url: string,
+  navTimeoutMs: number,
+  settleMs: number,
+): Promise<string | undefined> {
+  try {
+    await safeGoto(page, url, navTimeoutMs, settleMs);
+    await warmupLazyContent(page);
+    // Request raw base64 string directly from Puppeteer to avoid Buffer casting errors
+    const raw = await page.screenshot({
+      type: "png",
+      fullPage: true,
+      encoding: "base64",
+      captureBeyondViewport: true,
+    });
+    if (typeof raw === "string") {
+      return `data:image/png;base64,${raw}`;
+    }
+    return undefined;
+  } catch (err) {
+    console.warn("[screenshot:tryCapture:error]", String(err));
+    return undefined;
+  }
+}
+
+export async function captureScreenshots(
+  url: string,
+  options: ScreenshotOptions = {},
+) {
+  const navTimeoutMs = options.navTimeoutMs ?? SCREENSHOT_NAV_TIMEOUT_MS;
+  const settleMs = options.settleMs ?? POST_LOAD_SETTLE_MS;
+  const includeMobile = options.includeMobile ?? true;
   const start = Date.now();
   console.log(
     "[screenshot:start]",
-    JSON.stringify({ url, timeoutMs: SCREENSHOT_NAV_TIMEOUT_MS }),
+    JSON.stringify({ url, timeoutMs: navTimeoutMs, includeMobile }),
   );
 
   const puppeteer = await import("puppeteer");
@@ -86,18 +122,19 @@ export async function captureScreenshots(url: string) {
 
     const desktopPage = await browser.newPage();
     await desktopPage.setViewport({ width: 1366, height: 900 });
-    await preparePage(desktopPage, DESKTOP_UA);
-    try {
-      await safeGoto(desktopPage, url);
-      await warmupScroll(desktopPage);
-      const raw = (
-        (await desktopPage.screenshot({
-          type: "png",
-          fullPage: true,
-        })) as Buffer
-      ).toString("base64");
-      desktop = `data:image/png;base64,${raw}`;
-    } catch (error) {
+    await preparePage(desktopPage, DESKTOP_UA, navTimeoutMs);
+    desktop = await tryCapture(desktopPage, url, navTimeoutMs, settleMs);
+    if (!desktop) {
+      // One relaxed retry for JS-heavy sites that miss the first short window.
+      desktop = await tryCapture(
+        desktopPage,
+        url,
+        Math.max(navTimeoutMs, 10000),
+        Math.max(settleMs, 800),
+      );
+    }
+    if (!desktop) {
+      const error = new Error("desktop screenshot retry exhausted");
       console.log(
         "[screenshot:desktop:failed]",
         JSON.stringify({
@@ -107,29 +144,34 @@ export async function captureScreenshots(url: string) {
       );
     }
 
-    const mobilePage = await browser.newPage();
-    await mobilePage.setViewport({
-      width: 390,
-      height: 844,
-      isMobile: true,
-      hasTouch: true,
-    });
-    await preparePage(mobilePage, MOBILE_UA);
-    try {
-      await safeGoto(mobilePage, url);
-      await warmupScroll(mobilePage);
-      const raw = (
-        (await mobilePage.screenshot({ type: "png", fullPage: true })) as Buffer
-      ).toString("base64");
-      mobile = `data:image/png;base64,${raw}`;
-    } catch (error) {
-      console.log(
-        "[screenshot:mobile:failed]",
-        JSON.stringify({
+    if (includeMobile) {
+      const mobilePage = await browser.newPage();
+      await mobilePage.setViewport({
+        width: 390,
+        height: 844,
+        isMobile: true,
+        hasTouch: true,
+      });
+      await preparePage(mobilePage, MOBILE_UA, navTimeoutMs);
+      mobile = await tryCapture(mobilePage, url, navTimeoutMs, settleMs);
+      if (!mobile) {
+        mobile = await tryCapture(
+          mobilePage,
           url,
-          error: error instanceof Error ? error.message : "unknown",
-        }),
-      );
+          Math.max(navTimeoutMs, 10000),
+          Math.max(settleMs, 800),
+        );
+      }
+      if (!mobile) {
+        const error = new Error("mobile screenshot retry exhausted");
+        console.log(
+          "[screenshot:mobile:failed]",
+          JSON.stringify({
+            url,
+            error: error instanceof Error ? error.message : "unknown",
+          }),
+        );
+      }
     }
 
     if (!desktop && !mobile) {

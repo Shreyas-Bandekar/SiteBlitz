@@ -1,0 +1,69 @@
+[
+  {
+    "name": "woocommerce",
+    "url": "https://www.woocommerce.com",
+    "overall": 86,
+    "mobile": 84,
+    "seo": 88,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "San Francisco",
+    "state": "California",
+    "country": "United States",
+    "lastUpdated": "2026-03-25T10:25:25.152Z"
+  },
+  {
+    "name": "shopify",
+    "url": "https://www.shopify.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T10:25:57.233Z",
+    "city": "Ottawa",
+    "state": "Ontario",
+    "country": "Canada"
+  },
+  {
+    "name": "flipkart",
+    "url": "https://www.flipkart.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 80,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T10:26:29.118Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  },
+  {
+    "name": "myntra",
+    "url": "https://www.myntra.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T10:26:59.737Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  },
+  {
+    "name": "bigcommerce",
+    "url": "https://www.bigcommerce.com",
+    "overall": 85,
+    "mobile": 83,
+    "seo": 87,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "Austin",
+    "state": "Texas",
+    "country": "United States",
+    "lastUpdated": "2026-03-25T10:25:25.152Z"
+  }
+]

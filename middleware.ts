@@ -1,30 +1,58 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-import { AUTH_COOKIE_NAME, getSecretBytes } from "./lib/auth-config";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  SESSION_COOKIE_NAME,
+  verifySessionToken,
+} from "./lib/auth/session-core";
 
-async function hasValidSession(request: NextRequest) {
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (!token) return false;
-
-  try {
-    await jwtVerify(token, getSecretBytes());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function middleware(request: NextRequest) {
-  const authed = await hasValidSession(request);
-  if (authed) return NextResponse.next();
-
-  const loginUrl = new URL("/login", request.url);
-  const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
-  loginUrl.searchParams.set("next", nextPath);
+function redirectToLogin(req: NextRequest): NextResponse {
+  const loginUrl = new URL("/login", req.url);
+  const redirectTarget = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+  loginUrl.searchParams.set("redirect", redirectTarget);
   return NextResponse.redirect(loginUrl);
 }
 
+function unauthorizedApiResponse(
+  status: number,
+  message: string,
+): NextResponse {
+  return NextResponse.json({ error: message }, { status });
+}
+
+export async function middleware(req: NextRequest) {
+  const isApiRequest = req.nextUrl.pathname.startsWith("/api/");
+  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) {
+    if (isApiRequest) {
+      return unauthorizedApiResponse(401, "Unauthenticated");
+    }
+    return redirectToLogin(req);
+  }
+
+  const payload = await verifySessionToken(token);
+  if (!payload?.sub) {
+    if (isApiRequest) {
+      return unauthorizedApiResponse(401, "Invalid session");
+    }
+    return redirectToLogin(req);
+  }
+
+  if (!payload.emailVerified) {
+    if (isApiRequest) {
+      return unauthorizedApiResponse(403, "Email not verified");
+    }
+    const verifyUrl = new URL("/verify-email", req.url);
+    verifyUrl.searchParams.set("required", "1");
+    return NextResponse.redirect(verifyUrl);
+  }
+
+  return NextResponse.next();
+}
+
 export const config = {
-  matcher: ["/audit/:path*", "/account/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/account/:path*",
+    "/audit/:path*",
+    "/api/audit/:path*",
+  ],
 };

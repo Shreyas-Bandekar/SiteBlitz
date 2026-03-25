@@ -1,81 +1,58 @@
 import crypto from "crypto";
-import {
-  createUser,
-  getUserByEmail,
-  setEmailVerificationToken,
-} from "../../../../lib/live-database";
-import {
-  generateOneTimeToken,
-  hashOneTimeToken,
-  hashPassword,
-  setSessionCookie,
-} from "../../../../lib/auth-server";
+import { z } from "zod";
+import { createAuthUser, getAuthUserByEmail } from "../../../../lib/auth/db";
+import { hashPassword } from "../../../../lib/auth/password";
+import { createHashedToken } from "../../../../lib/auth/token";
+
+const signupSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(8).max(128),
+});
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
-    const normalizedEmail =
-      typeof email === "string" ? email.trim().toLowerCase() : "";
-    const plainPassword = typeof password === "string" ? password : "";
-
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    const parsed = signupSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return Response.json(
-        { error: "Valid email is required" },
-        { status: 400 },
-      );
-    }
-    if (plainPassword.length < 8) {
-      return Response.json(
-        { error: "Password must be at least 8 characters" },
+        { error: "Invalid email or password" },
         { status: 400 },
       );
     }
 
-    const existing = await getUserByEmail(normalizedEmail);
+    const email = parsed.data.email.trim().toLowerCase();
+    const existing = await getAuthUserByEmail(email);
     if (existing) {
-      return Response.json(
-        { error: "Email is already registered" },
-        { status: 409 },
-      );
+      return Response.json({ error: "User already exists" }, { status: 409 });
     }
 
-    const user = await createUser({
+    const passwordHash = await hashPassword(parsed.data.password);
+    const verification = createHashedToken(24 * 60);
+
+    const user = await createAuthUser({
       id: crypto.randomUUID(),
-      email: normalizedEmail,
-      passwordHash: await hashPassword(plainPassword),
+      email,
+      passwordHash,
+      emailVerificationTokenHash: verification.tokenHash,
+      emailVerificationExpiresAt: verification.expiresAt,
     });
 
-    const verificationToken = generateOneTimeToken();
-    await setEmailVerificationToken(
-      user.id,
-      hashOneTimeToken(verificationToken),
-      new Date(Date.now() + 24 * 60 * 60 * 1000),
-    );
-
-    await setSessionCookie({ userId: user.id, email: user.email });
-    const origin = new URL(req.url).origin;
-    const verificationUrl = `${origin}/verify-email?token=${encodeURIComponent(verificationToken)}`;
-    console.log(
-      "[auth:verify-email-link]",
-      JSON.stringify({ email: user.email, verificationUrl }),
-    );
-
-    return Response.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-      },
-      ...(process.env.NODE_ENV !== "production" ? { verificationUrl } : {}),
-    });
-  } catch (error) {
     return Response.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to create account",
+        message: "Signup successful. Verify your email before logging in.",
+        user: {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.email_verified,
+        },
+        verificationToken: verification.token,
+        verificationExpiresAt: verification.expiresAt.toISOString(),
       },
-      { status: 500 },
+      { status: 201 },
     );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Signup failed";
+    return Response.json({ error: message }, { status: 500 });
   }
 }

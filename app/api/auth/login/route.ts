@@ -1,49 +1,66 @@
-import { getUserByEmail } from "../../../../lib/live-database";
-import { setSessionCookie, verifyPassword } from "../../../../lib/auth-server";
+import { z } from "zod";
+import { getAuthUserByEmail } from "../../../../lib/auth/db";
+import { verifyPassword } from "../../../../lib/auth/password";
+import {
+  setAuthSessionCookie,
+  signSessionToken,
+} from "../../../../lib/auth/session";
+
+const loginSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(8).max(128),
+});
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
-    const normalizedEmail =
-      typeof email === "string" ? email.trim().toLowerCase() : "";
-    const plainPassword = typeof password === "string" ? password : "";
-
-    if (!normalizedEmail || !plainPassword) {
+    const parsed = loginSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return Response.json(
-        { error: "Email and password are required" },
+        { error: "Invalid email or password" },
         { status: 400 },
       );
     }
 
-    const user = await getUserByEmail(normalizedEmail);
+    const email = parsed.data.email.trim().toLowerCase();
+    const user = await getAuthUserByEmail(email);
     if (!user) {
+      return Response.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    const validPassword = await verifyPassword(
+      parsed.data.password,
+      user.password_hash,
+    );
+    if (!validPassword) {
+      return Response.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    if (!user.email_verified) {
       return Response.json(
-        { error: "Invalid email or password" },
-        { status: 401 },
+        { error: "Email not verified", code: "EMAIL_NOT_VERIFIED" },
+        { status: 403 },
       );
     }
 
-    const valid = await verifyPassword(plainPassword, user.passwordHash);
-    if (!valid) {
-      return Response.json(
-        { error: "Invalid email or password" },
-        { status: 401 },
-      );
-    }
+    const sessionToken = await signSessionToken({
+      sub: user.id,
+      email: user.email,
+      emailVerified: user.email_verified,
+    });
+    await setAuthSessionCookie(sessionToken);
 
-    await setSessionCookie({ userId: user.id, email: user.email });
     return Response.json({
+      message: "Login successful",
       user: {
         id: user.id,
         email: user.email,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
+        emailVerified: user.email_verified,
       },
     });
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Login failed" },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : "Login failed";
+    return Response.json({ error: message }, { status: 500 });
   }
 }

@@ -1,14 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getGeminiInsights } from "../lib/gemini-insights";
+import { getGroqInsights } from "../lib/groq-insights";
 
-test("Gemini fallback: missing keys returns explicit renderable fallback schema", async () => {
-  const oldKey = process.env.GEMINI_API_KEY;
-  const oldGoogleKey = process.env.GOOGLE_API_KEY;
-  delete process.env.GEMINI_API_KEY;
-  delete process.env.GOOGLE_API_KEY;
+test("Groq fallback: missing keys returns explicit renderable fallback schema", async () => {
+  const oldKey = process.env.GROQ_API_KEY;
+  delete process.env.GROQ_API_KEY;
   try {
-    const result = await getGeminiInsights(
+    const result = await getGroqInsights(
       { issues: ["No CTA", "No contact form"] },
       "https://example.com",
       { trustScore: 85, grade: "B", badgeText: "85% TRUST", factors: [] }
@@ -20,7 +18,6 @@ test("Gemini fallback: missing keys returns explicit renderable fallback schema"
     assert.ok(typeof result.fallbackReason === "string");
     assert.equal(result.sourceMode, "fallback");
   } finally {
-    if (oldKey) process.env.GEMINI_API_KEY = oldKey;
-    if (oldGoogleKey) process.env.GOOGLE_API_KEY = oldGoogleKey;
+    if (oldKey) process.env.GROQ_API_KEY = oldKey;
   }
 });

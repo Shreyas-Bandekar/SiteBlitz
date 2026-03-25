@@ -1,5 +1,5 @@
 import type { TrustData } from "../../../lib/audit-types";
-import { getGeminiInsights } from "../../../lib/gemini-insights";
+import { getGroqInsights } from "../../../lib/groq-insights";
 
 type AiInsightsRequest = {
   auditData: { issues?: string[]; [key: string]: unknown };
@@ -14,6 +14,6 @@ export async function POST(req: Request) {
     badgeText: "0% TRUST",
     factors: [],
   };
-  const insights = await getGeminiInsights(auditData, "api:/ai-insights", fallbackTrust);
+  const insights = await getGroqInsights(auditData, "api:/ai-insights", fallbackTrust);
   return Response.json(insights);
 }

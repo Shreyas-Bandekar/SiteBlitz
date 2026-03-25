@@ -31,7 +31,7 @@ function isValidCVResponse(value: unknown): value is CVScoreResponse {
 
 export async function getCVScore(screenshotB64: string | undefined): Promise<CVScoreResponse | null> {
   if (!process.env.FLASK_CV_URL || !screenshotB64) {
-    console.log('[cv-client] CV disabled or no screenshot - using Gemini fallback only');
+    console.log('[cv-client] CV disabled or no screenshot - using AI text fallback only');
     return null;
   }
   
@@ -59,10 +59,10 @@ export async function getCVScore(screenshotB64: string | undefined): Promise<CVS
     return json;
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
-      console.warn('[cv-client] CV request timed out - Gemini fallback only');
+      console.warn('[cv-client] CV request timed out - using AI text fallback only');
       return null;
     }
-    console.warn('[cv-client] CV service unreachable - Gemini fallback only');
+    console.warn('[cv-client] CV service unreachable - using AI text fallback only');
     return null;
   } finally {
     clearTimeout(timeout);

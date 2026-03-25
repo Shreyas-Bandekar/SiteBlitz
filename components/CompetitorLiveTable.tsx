@@ -3,7 +3,7 @@
 import { CompetitorLiveBadge } from "./LiveDataBadges";
 import type { LiveCompetitorAudit } from "../lib/audit-types";
 
-export default function CompetitorLiveTable({ competitors }: { competitors: (LiveCompetitorAudit & { sourceType?: "live" | "pre-audited"; audited?: string })[] }) {
+export default function CompetitorLiveTable({ competitors }: { competitors: (LiveCompetitorAudit & { sourceType?: "live" | "pre-audited"; audited?: string; city?: string; district?: string; state?: string; country?: string })[] }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
       <table className="min-w-full text-sm">
@@ -11,6 +11,10 @@ export default function CompetitorLiveTable({ competitors }: { competitors: (Liv
           <tr>
             <th className="px-4 py-3">Competitor</th>
             <th className="px-4 py-3">Overall Score</th>
+            <th className="px-4 py-3">City</th>
+            <th className="px-4 py-3">District</th>
+            <th className="px-4 py-3">State</th>
+            <th className="px-4 py-3">Country</th>
             <th className="px-4 py-3">Audit Status</th>
           </tr>
         </thead>
@@ -28,6 +32,10 @@ export default function CompetitorLiveTable({ competitors }: { competitors: (Liv
                   </a>
                 </td>
                 <td className="px-4 py-3 font-semibold text-lg">{row.score}</td>
+                <td className="px-4 py-3">{row.city || "-"}</td>
+                <td className="px-4 py-3">{row.district || "-"}</td>
+                <td className="px-4 py-3">{row.state || "-"}</td>
+                <td className="px-4 py-3">{row.country || "-"}</td>
                 <td className="px-4 py-3">
                   <CompetitorLiveBadge auditedDate={auditDate} sourceType={sourceType} />
                 </td>

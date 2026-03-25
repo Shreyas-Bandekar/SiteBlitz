@@ -1,9 +1,8 @@
 // lib/ai.ts - DOMAIN-AWARE & BULLETPROOF AI LAYER
-import { generateText } from 'ai';
-import { google } from '@ai-sdk/google';
 import { analyzeLeadGen } from './leadgen';
 import { prepareAuditData } from './ai-data';
 import { logAIAttempt } from './ai-monitor';
+import { env } from './env';
 
 export type AiInsights = {
   ui_ux_score: number;
@@ -17,6 +16,52 @@ type DeterministicEvidence = {
   hasContactForm: boolean;
   contactFormConfidence: number;
 };
+
+type GroqChatResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
+async function generateGroqJson(prompt: string, timeoutMs: number): Promise<string> {
+  if (!env.GROQ_API_KEY) throw new Error("MISSING_GROQ_KEY");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.GROQ_API_KEY}`,
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: env.GROQ_MODEL,
+        temperature: 0.1,
+        max_tokens: 520,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: "Return valid JSON only and strictly follow the user schema.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`GROQ_HTTP_${res.status}:${err.slice(0, 180)}`);
+    }
+    const payload = (await res.json()) as GroqChatResponse;
+    const text = payload.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error("EMPTY_MODEL_RESPONSE");
+    return text;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function fallbackInsights(leadScore: number): AiInsights {
   return {
@@ -109,14 +154,8 @@ export async function generatePerfectAuditInsights(rawData: any, maxRetries = 3)
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('TIMEOUT_EXCEEDED')), 10000)
-      );
-
-      const aiCallPromise = generateText({
-        model: google('gemini-1.5-flash'),
-        temperature: 0.1,
-        system: `You are a Senior SMB CRO expert.
+      const timeoutMs = Number(process.env.AI_TIMEOUT_MS || env.GROQ_TIMEOUT_MS || 10000);
+      const prompt = `You are a Senior SMB CRO expert.
         STRICT DOMAIN ALIGNMENT RULES:
         1. Website Identity: ${compactData.title} (${compactData.url_type})
         2. IF url_type is 'agency', 'local_service', or 'other', you MUST NOT use ecommerce terminology like 'cart', 'checkout', 'product page', 'ecommerce', or 'store'.
@@ -134,12 +173,10 @@ export async function generatePerfectAuditInsights(rawData: any, maxRetries = 3)
           "issues": [{"type": "ux|seo|perf|lead", "severity": "high|medium|low", "fix": string, "roi": string}],
           "quick_wins": [{"action": string, "effort": "5min|30min|2hr", "impact": string, "priority": number}]
         }
-        No other text.`,
-        prompt: `Analyze ${rawData.url} and generate 3 high-ROI CRO fixes matching its ${compactData.url_type} nature.`
-      });
+        No other text.
+        Analyze ${rawData.url} and generate 3 high-ROI CRO fixes matching its ${compactData.url_type} nature.`;
 
-      const response = await Promise.race([aiCallPromise, timeoutPromise]) as Awaited<typeof aiCallPromise>;
-      const text = response.text.trim();
+      const text = await generateGroqJson(prompt, timeoutMs);
       
       const start = text.indexOf("{");
       const end = text.lastIndexOf("}");

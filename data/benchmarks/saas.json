@@ -1,0 +1,43 @@
+[
+  {
+    "name": "hubspot",
+    "url": "https://www.hubspot.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T03:44:05.831Z",
+    "city": "Cambridge",
+    "state": "Massachusetts",
+    "country": "United States"
+  },
+  {
+    "name": "zoho",
+    "url": "https://www.zoho.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T03:44:25.962Z",
+    "city": "Chennai",
+    "district": "Chennai",
+    "state": "Tamil Nadu",
+    "country": "India"
+  },
+  {
+    "name": "freshworks",
+    "url": "https://www.freshworks.com",
+    "overall": 77,
+    "mobile": 63,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T03:44:46.481Z",
+    "city": "Chennai",
+    "district": "Chennai",
+    "state": "Tamil Nadu",
+    "country": "India"
+  }
+]

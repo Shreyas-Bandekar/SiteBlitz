@@ -1,9 +1,4 @@
-import type {
-  AuditReport,
-  DeterministicScores,
-  Issue,
-  Recommendation,
-} from "./audit-types";
+import type { AuditReport, DeterministicScores, Issue, Recommendation } from "./audit-types";
 
 /** Provenance string for trust metadata on deterministic category scores */
 export const DETERMINISTIC_SCORES_TRUST_SOURCE =
@@ -20,6 +15,8 @@ export function computeScores(input: {
   lighthousePerformance: number;
   lighthouseSeo: number;
   lighthouseAccessibility: number;
+  lighthouseBestPractices?: number;
+  lighthouseAvailable?: boolean;
   hasViewport: boolean;
   mobileTapTargetsOk: boolean;
   h1Count: number;
@@ -29,7 +26,6 @@ export function computeScores(input: {
   ctaCount: number;
   ecommerceHint?: boolean;
   customPerformanceSignal?: number;
-  manualUiuxSignal?: number;
 }): DeterministicScores {
   const uiuxBase = clamp(
     50 +
@@ -37,50 +33,20 @@ export function computeScores(input: {
       (input.ctaCount > 0 ? 12 : -10) +
       (input.formCount > 0 ? 6 : -4),
     0,
-    100,
+    100
   );
-  const manualUiux =
-    typeof input.manualUiuxSignal === "number" &&
-    Number.isFinite(input.manualUiuxSignal)
-      ? clamp(Math.round(input.manualUiuxSignal), 0, 100)
-      : null;
-  let uiux = clamp(
-    Math.round(uiuxBase * 0.65 + (manualUiux ?? uiuxBase) * 0.35),
-    0,
-    100,
-  );
-
-  const seo = clamp(
-    Math.round(
-      input.lighthouseSeo * 0.7 +
-        (input.titlePresent ? 12 : -10) +
-        (input.metaDescriptionPresent ? 8 : -6) +
-        (input.h1Count === 1 ? 6 : -6),
-    ),
-    0,
-    100,
-  );
+  // Keep Lighthouse category scores as source-of-truth when available.
+  const seo = clamp(Math.round(input.lighthouseSeo), 0, 100);
   const mobileBase = clamp(
     55 + (input.hasViewport ? 20 : -20) + (input.mobileTapTargetsOk ? 15 : -12),
     0,
-    100,
+    100
   );
-  const performanceBase = clamp(
-    Math.round(input.lighthousePerformance),
-    0,
-    100,
-  );
-  const accessibility = clamp(
-    Math.round(input.lighthouseAccessibility),
-    0,
-    100,
-  );
-  const leadConversionBase = clamp(
-    45 + (input.formCount > 0 ? 20 : -10) + (input.ctaCount > 0 ? 20 : -15),
-    0,
-    100,
-  );
+  const performanceBase = clamp(Math.round(input.lighthousePerformance), 0, 100);
+  const accessibility = clamp(Math.round(input.lighthouseAccessibility), 0, 100);
+  const leadConversionBase = clamp(45 + (input.formCount > 0 ? 20 : -10) + (input.ctaCount > 0 ? 20 : -15), 0, 100);
 
+  let uiux = uiuxBase;
   let mobile = mobileBase;
   let performance = performanceBase;
   let leadConversion = leadConversionBase;
@@ -88,47 +54,39 @@ export function computeScores(input: {
   if (input.ecommerceHint) {
     uiux = Math.max(75, uiuxBase);
     mobile = Math.max(80, mobileBase);
-    const custom = clamp(
-      Math.round(input.customPerformanceSignal ?? performanceBase),
-      0,
-      100,
-    );
-    performance = clamp(
-      Math.round(input.lighthousePerformance * 0.7 + custom * 0.3),
-      0,
-      100,
-    );
+    const custom = clamp(Math.round(input.customPerformanceSignal ?? performanceBase), 0, 100);
+    performance = clamp(Math.round(input.lighthousePerformance * 0.7 + custom * 0.3), 0, 100);
     leadConversion = Math.max(70, leadConversionBase);
   }
 
-  let overall = Math.round(
-    uiux * 0.2 +
-      seo * 0.2 +
-      mobile * 0.15 +
-      performance * 0.2 +
-      accessibility * 0.15 +
-      leadConversion * 0.1,
+  const lighthouseAvailable = Boolean(input.lighthouseAvailable);
+  const lighthouseBestPractices = clamp(
+    Math.round(input.lighthouseBestPractices ?? (input.lighthousePerformance + input.lighthouseSeo + input.lighthouseAccessibility) / 3),
+    0,
+    100
   );
 
+  let overall: number;
+  if (lighthouseAvailable) {
+    // Prioritize Lighthouse parity: mostly Lighthouse category composite + a small conversion/UI signal blend.
+    const lighthouseComposite = Math.round(
+      (performance + seo + accessibility + lighthouseBestPractices) / 4
+    );
+    const diagnosticComposite = Math.round((uiux + mobile + leadConversion) / 3);
+    overall = Math.round(lighthouseComposite * 0.85 + diagnosticComposite * 0.15);
+  } else {
+    overall = Math.round(
+      uiux * 0.2 + seo * 0.2 + mobile * 0.15 + performance * 0.2 + accessibility * 0.15 + leadConversion * 0.1
+    );
+  }
+
   if (input.ecommerceHint) {
-    const qualitySignals = [
-      seo >= 80,
-      accessibility >= 80,
-      mobile >= 80,
-    ].filter(Boolean).length;
+    const qualitySignals = [seo >= 80, accessibility >= 80, mobile >= 80].filter(Boolean).length;
     if (qualitySignals >= 2) {
       overall = Math.max(85, overall);
     }
   }
-  return {
-    uiux,
-    seo,
-    mobile,
-    performance,
-    accessibility,
-    leadConversion,
-    overall,
-  };
+  return { uiux, seo, mobile, performance, accessibility, leadConversion, overall };
 }
 
 export function prioritizeRecommendations(issues: Issue[]): Recommendation[] {
@@ -175,10 +133,7 @@ export function getCachedReport(url: string): AuditReport | null {
 
 export function setCachedReport(url: string, report: AuditReport) {
   const key = makeScoreCacheKey(url, "report");
-  reportCache.set(key, {
-    value: report,
-    expiresAt: Date.now() + REPORT_CACHE_TTL_MS,
-  });
+  reportCache.set(key, { value: report, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
 }
 
 function clamp(value: number, min: number, max: number) {

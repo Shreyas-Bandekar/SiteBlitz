@@ -27,7 +27,13 @@ export type IndustryCategory =
   | "other";
 
 export type Issue = {
-  category: "uiux" | "seo" | "mobile" | "performance" | "accessibility" | "leadConversion";
+  category:
+    | "uiux"
+    | "seo"
+    | "mobile"
+    | "performance"
+    | "accessibility"
+    | "leadConversion";
   title: string;
   detail: string;
   severity: Severity;
@@ -65,6 +71,10 @@ export type BenchmarkSite = {
   auditedDate: string;
   sourceType: "pre-audited" | "live";
   lastUpdated: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
 };
 
 export type CompetitorComparison = {
@@ -88,7 +98,7 @@ export type ROIResult = {
 };
 
 export type ContentFix = {
-  type: "title" | "metaDescription" | "h1";
+  type: "contentClarity" | "conversionPath" | "trustAndProof";
   current: string;
   suggested: string;
   reason: string;
@@ -124,6 +134,21 @@ export type LiveCompetitorAudit = {
   url: string;
   score: number;
   timestamp: string;
+  audited?: string;
+  sourceType?: "live" | "pre-audited";
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
+};
+
+export type LocationSignals = {
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
+  confidence: number;
+  matchedSignals: string[];
 };
 
 export type AnalyticsSignal = {
@@ -153,7 +178,7 @@ export type TrustData = {
   factors: string[];
 };
 
-export type GeminiInsights = {
+export type GroqInsights = {
   summary: string;
   quickWins: string[];
   trustScore: number;
@@ -210,7 +235,11 @@ export type AuditReport = {
   trends: Array<{ date: string; overall: number }>;
   trendsSummary: TrendsSummary;
   aiInsights?: AiInsights;
-  quick_wins?: Array<{ action: string; effort: '5min' | '30min' | '2hr'; impact: string }>;
+  quick_wins?: Array<{
+    action: string;
+    effort: "5min" | "30min" | "2hr";
+    impact: string;
+  }>;
   cvBreakdown?: {
     contrast: number;
     layout: number;
@@ -225,6 +254,7 @@ export type AuditReport = {
   summary?: string;
   deterministicNotes: string[];
   pipeline: string[];
+  pipelineWarnings?: string[];
   isLive: true;
   status: "live-complete";
   liveTimestamp: string;
@@ -246,31 +276,35 @@ export type AuditReport = {
     description: string;
     url: string;
   };
-    uxScore?: number;
-    uxIssuesCount?: number;
-    /** Lead gen rule-based analysis result */
-    leadGenAnalysis?: {
-      score: number;
-      issues: string[];
-      roiImpact: string;
-      aboveFoldCta: boolean;
-      hasContactForm: boolean;
-      contactFormConfidence?: number;
-      contactFormEvidence?: string[];
-    };
-    /** Multi-device tap target results */
-    deviceResults?: Array<{ device: string; tapTargetsOk: boolean; smallTargets: number }>;
-    /** All manual rule issues combined (UX + Lead Gen) */
-    manualRulesIssues?: string[];
-    /** Per-artifact trust labels (additive; optional for older clients). */
-    trustByField?: Record<string, TrustMeta>;
-    /** 0–100 aggregate trust score */
-    overallTrustScore?: number;
-    trustBreakdown?: TrustBreakdown;
-    /** True when blocked response, degraded fallback, or critical scan gaps */
-    scanBlockedOrDegraded?: boolean;
+  uxScore?: number;
+  uxIssuesCount?: number;
+  /** Lead gen rule-based analysis result */
+  leadGenAnalysis?: {
+    score: number;
+    issues: string[];
+    roiImpact: string;
+    aboveFoldCta: boolean;
+    hasContactForm: boolean;
+    contactFormConfidence?: number;
+    contactFormEvidence?: string[];
+  };
+  /** Multi-device tap target results */
+  deviceResults?: Array<{
+    device: string;
+    tapTargetsOk: boolean;
+    smallTargets: number;
+  }>;
+  /** All manual rule issues combined (UX + Lead Gen) */
+  manualRulesIssues?: string[];
+  /** Per-artifact trust labels (additive; optional for older clients). */
+  trustByField?: Record<string, TrustMeta>;
+  /** 0–100 aggregate trust score */
+  overallTrustScore?: number;
+  trustBreakdown?: TrustBreakdown;
+  /** True when blocked response, degraded fallback, or critical scan gaps */
+  scanBlockedOrDegraded?: boolean;
   trustData?: TrustData;
-  geminiInsights?: GeminiInsights;
+  groqInsights?: GroqInsights;
   roadmap?: ManualRoadmap;
   leadGen?: LeadGenScan;
   deterministic?: boolean;
@@ -281,6 +315,7 @@ export type AuditReport = {
     avgOrderValue: number;
     dataSource: string;
   };
+  targetLocation?: LocationSignals;
   industry?: IndustryDetection;
   liveDataSources?: LiveDataSource[];
   dbStatus?: "saved" | "failed";

@@ -1,6 +1,13 @@
-import { clearSessionCookie } from "../../../../lib/auth-server";
+import { clearAuthSessionCookie } from "../../../../lib/auth/session";
+
+export const runtime = "nodejs";
 
 export async function POST() {
-  await clearSessionCookie();
-  return Response.json({ ok: true });
+  try {
+    await clearAuthSessionCookie();
+    return Response.json({ message: "Logged out" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Logout failed";
+    return Response.json({ error: message }, { status: 500 });
+  }
 }
