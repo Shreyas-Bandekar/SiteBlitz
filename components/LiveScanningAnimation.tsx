@@ -20,7 +20,9 @@ export default function LiveScanningAnimation({ active }: { active: number }) {
       <div className="border-b border-border bg-secondary/30 px-6 py-4">
         <div className="flex items-center gap-3">
           <ServerCog className="h-5 w-5 animate-pulse text-primary" />
-          <h3 className="font-semibold tracking-tight text-foreground">Executing Audit Pipeline</h3>
+          <h3 className="font-semibold tracking-tight text-foreground">
+            Executing Audit Pipeline
+          </h3>
         </div>
       </div>
       <CardContent className="p-6">
@@ -47,12 +49,22 @@ export default function LiveScanningAnimation({ active }: { active: number }) {
                     style={{ transform: "translateX(0)" }}
                   />
                 )}
-                
+
                 <div className="mb-4 flex items-center justify-between">
-                  <span className={`text-xs font-mono font-medium uppercase ${
-                    isCompleted ? "text-success" : isCurrent ? "text-primary" : "text-muted-foreground"
-                  }`}>
-                    {isCompleted ? "DONE" : isCurrent ? "IN PROGRESS" : "PENDING"}
+                  <span
+                    className={`text-xs font-mono font-medium uppercase ${
+                      isCompleted
+                        ? "text-success"
+                        : isCurrent
+                          ? "text-primary"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {isCompleted
+                      ? "DONE"
+                      : isCurrent
+                        ? "IN PROGRESS"
+                        : "PENDING"}
                   </span>
                   {isCompleted ? (
                     <CheckCircle2 className="h-4 w-4 text-success" />
@@ -60,12 +72,16 @@ export default function LiveScanningAnimation({ active }: { active: number }) {
                     <CircleDashed className="h-4 w-4 animate-spin text-primary" />
                   ) : null}
                 </div>
-                <div className="text-sm font-medium text-foreground/80">{stage}</div>
-                
+                <div className="text-sm font-medium text-foreground/80">
+                  {stage}
+                </div>
+
                 <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-secondary">
                   <div
                     className={`h-full ${isCompleted ? "bg-success" : isCurrent ? "bg-primary" : "bg-transparent"}`}
-                    style={{ width: isCompleted ? "100%" : isCurrent ? "70%" : "0%" }}
+                    style={{
+                      width: isCompleted ? "100%" : isCurrent ? "70%" : "0%",
+                    }}
                   />
                 </div>
               </div>

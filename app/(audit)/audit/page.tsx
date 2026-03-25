@@ -169,7 +169,9 @@ export default function AuditPage() {
           <Badge className="hidden border border-emerald-300/20 bg-emerald-500/10 text-emerald-200 sm:inline-flex">
             Core Workspace
           </Badge>
-          <span className="ml-auto font-mono text-xs text-muted-foreground">Live</span>
+          <span className="ml-auto font-mono text-xs text-muted-foreground">
+            Live
+          </span>
         </div>
       </div>
 
