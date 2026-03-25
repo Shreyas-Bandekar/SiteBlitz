@@ -62,7 +62,10 @@ export default function ScreenshotCard({
       <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-0 gap-4 sm:gap-0 pb-4">
         <div className="space-y-1">
           <CardTitle>Website Analysis</CardTitle>
-          <CardDescription>Rendered homepage snapshot for quick visual QA.</CardDescription>
+          <CardDescription>
+            Full-page rendered capture with auto-scroll warm-up for lazy-loaded
+            sections.
+          </CardDescription>
         </div>
         <div className="inline-flex items-center rounded-lg border border-border bg-secondary/30 p-1 text-xs font-medium">
           <button
@@ -94,17 +97,19 @@ export default function ScreenshotCard({
           />
         ) : activeOk && activeSrc ? (
           <div className="rounded-xl border border-border bg-secondary/10 p-2 shadow-sm">
-            <img
-              key={`${fallbackTab}-${activeSrc.length}`}
-              src={activeSrc}
-              alt={`Captured ${fallbackTab} screenshot of ${url}`}
-              onError={handleImageError}
-              className={
-                fallbackTab === "desktop"
-                  ? "h-[420px] w-full rounded-lg object-cover object-top border border-border/50 bg-background"
-                  : "mx-auto h-[420px] w-auto max-w-full rounded-lg object-contain border border-border/50 bg-background"
-              }
-            />
+            <div className="max-h-[560px] overflow-auto rounded-lg border border-border/40 bg-background">
+              <img
+                key={`${fallbackTab}-${activeSrc.length}`}
+                src={activeSrc}
+                alt={`Captured ${fallbackTab} screenshot of ${url}`}
+                onError={handleImageError}
+                className={
+                  fallbackTab === "desktop"
+                    ? "h-auto w-full object-contain object-top"
+                    : "mx-auto h-auto w-full max-w-[420px] object-contain"
+                }
+              />
+            </div>
           </div>
         ) : (
           <PreviewPlaceholder

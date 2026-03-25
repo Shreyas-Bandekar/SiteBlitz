@@ -24,6 +24,30 @@ async function safeGoto(page: import("puppeteer").Page, url: string) {
   await new Promise((r) => setTimeout(r, POST_LOAD_SETTLE_MS));
 }
 
+/**
+ * Scroll through the page once so lazy-loaded sections/images render,
+ * then return to top before final full-page capture.
+ */
+async function warmupScroll(page: import("puppeteer").Page) {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      let total = 0;
+      const distance = Math.max(300, Math.floor(window.innerHeight * 0.8));
+      const timer = window.setInterval(() => {
+        const maxScroll = document.body.scrollHeight - window.innerHeight;
+        window.scrollBy(0, distance);
+        total += distance;
+        if (total >= maxScroll || window.scrollY + window.innerHeight >= document.body.scrollHeight) {
+          window.clearInterval(timer);
+          resolve();
+        }
+      }, 120);
+    });
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  });
+  await new Promise((r) => setTimeout(r, 600));
+}
+
 export async function captureScreenshots(url: string) {
   const start = Date.now();
   console.log("[screenshot:start]", JSON.stringify({ url, timeoutMs: SCREENSHOT_NAV_TIMEOUT_MS }));
@@ -50,7 +74,8 @@ export async function captureScreenshots(url: string) {
     await preparePage(desktopPage, DESKTOP_UA);
     try {
       await safeGoto(desktopPage, url);
-      const raw = ((await desktopPage.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
+      await warmupScroll(desktopPage);
+      const raw = ((await desktopPage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
       desktop = `data:image/png;base64,${raw}`;
     } catch (error) {
       console.log("[screenshot:desktop:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
@@ -61,7 +86,8 @@ export async function captureScreenshots(url: string) {
     await preparePage(mobilePage, MOBILE_UA);
     try {
       await safeGoto(mobilePage, url);
-      const raw = ((await mobilePage.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
+      await warmupScroll(mobilePage);
+      const raw = ((await mobilePage.screenshot({ type: "png", fullPage: true })) as Buffer).toString("base64");
       mobile = `data:image/png;base64,${raw}`;
     } catch (error) {
       console.log("[screenshot:mobile:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
