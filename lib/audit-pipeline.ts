@@ -25,7 +25,7 @@ const execFileAsync = promisify(execFile);
 const PLAYWRIGHT_DESKTOP_TIMEOUT_MS = 12000;
 const AXE_TIMEOUT_MS = 4000;
 const MOBILE_TIMEOUT_MS = 4500;
-const SCREENSHOT_TIMEOUT_MS = 14000;
+const SCREENSHOT_TIMEOUT_MS = 26000;
 const LIGHTHOUSE_TIMEOUT_MS = 20000;
 const HTML_FETCH_TIMEOUT_MS = 9000;
 const PIPELINE_BUDGET_MS = 30000;
@@ -139,11 +139,11 @@ export async function runAuditPipeline(
         withTimeout(async () => {
           pipeline.push("puppeteer-screenshot-fast");
           return await captureScreenshots(url, {
-            navTimeoutMs: 9000,
-            settleMs: 800,
-            includeMobile: false,
+            navTimeoutMs: 7000,
+            settleMs: 500,
+            includeMobile: true,
           });
-        }, Math.min(SCREENSHOT_TIMEOUT_MS, 14000), "screenshot")
+        }, Math.min(SCREENSHOT_TIMEOUT_MS, Math.max(9000, PIPELINE_BUDGET_MS - (Date.now() - pipelineStartedAt))), "screenshot")
       ),
     ]);
 
@@ -270,7 +270,11 @@ export async function runAuditPipeline(
       ),
       runStageTrace(stageTrace, "screenshot", async () => {
         pipeline.push("puppeteer-screenshot");
-        return await captureScreenshots(url);
+        return await withTimeout(
+          async () => await captureScreenshots(url),
+          Math.min(SCREENSHOT_TIMEOUT_MS, Math.max(5000, PIPELINE_BUDGET_MS - (Date.now() - pipelineStartedAt))),
+          "screenshot"
+        );
       }),
       runStageTrace(stageTrace, "lighthouse", async () => withTimeout(async () => {
         pipeline.push("lighthouse");
@@ -365,9 +369,9 @@ export async function runAuditPipeline(
 
   const screenshots = screenshotResult.status === "fulfilled" ? screenshotResult.value : undefined;
   
-  // In fast mode, try to extract screenshots from Lighthouse output if available
+  // If Puppeteer screenshot is missing, try Lighthouse screenshot fallback when available.
   let enhancedScreenshots = screenshots;
-  if (fastLighthouseMode && lighthouseResult.status === "fulfilled" && !screenshots) {
+  if (lighthouseResult.status === "fulfilled" && !screenshots?.desktop && !screenshots?.mobile) {
     const lhScreenshot = (lighthouseResult.value as any)?.audits?.["full-page-screenshot"]?.details?.screenshot?.data;
     if (lhScreenshot) {
       enhancedScreenshots = { desktop: `data:image/webp;base64,${lhScreenshot}` };

@@ -43,7 +43,14 @@ export function detectStructuralIssues(input: IssueSignalInput): Issue[] {
   }
 
   if (input.formCount === 0) {
-    issues.push(makeIssue("leadConversion", "No lead form detected", "Add a lead form near primary CTA.", "high"));
+    issues.push(
+      makeIssue(
+        "leadConversion",
+        "No lead form detected",
+        "Place a simple contact form next to your main button so visitors can reach you quickly.",
+        "high"
+      )
+    );
   }
 
   if (input.ctaCount === 0) {

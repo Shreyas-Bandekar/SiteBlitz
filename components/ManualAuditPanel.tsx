@@ -74,7 +74,9 @@ export function ScoreTable({ uxIssues, leadIssues, deviceResults, uxScore, leadS
           ))}
         </div>
       ) : (
-        <p className="px-5 py-6 text-center text-sm text-muted-foreground">Great news. No manual rule issues were detected in this scan.</p>
+        <p className="px-5 py-6 text-center text-sm text-muted-foreground">
+          No manual-rule issues were flagged in the current scan data. If this looks unexpected, run a full scan again after page load completes.
+        </p>
       )}
 
       {/* Device Results */}

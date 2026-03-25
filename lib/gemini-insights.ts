@@ -95,6 +95,11 @@ function hasEvidenceOverlap(text: string, contextKeywords: Set<string>): boolean
   return overlaps.length >= 2;
 }
 
+function looksActionable(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  return /^(add|fix|reduce|improve|move|update|remove|compress|simplify|optimi[sz]e|place|validate)\b/.test(t);
+}
+
 function issueToAction(issue: string): string {
   const clean = sanitizeActionText(issue);
   if (!clean) return "";
@@ -133,6 +138,7 @@ function qualityGateWins(
   const filtered = dedupeWins(modelWins)
     .map((w) => sanitizeActionText(w))
     .filter((w) => w.length >= 20)
+    .filter((w) => looksActionable(w))
     .filter((w) => !isGenericWin(w))
     .filter((w) => !hasUnsupportedClaim(w))
     .filter((w) => hasEvidenceOverlap(w, contextKeywords));

@@ -7,15 +7,14 @@ test("stripHtmlForContentPreview removes nested tags and decodes entities", () =
   assert.equal(stripHtmlForContentPreview(""), "");
 });
 
-test("H1 current value is plain text without markup", () => {
+test("content suggestions use actionable categories", () => {
   const html = `<!DOCTYPE html><html><head><title>TechShala</title></head><body>
     <h1><span class="x">Build skills <strong>together</strong></span></h1>
   </body></html>`;
   const rows = generateContentSuggestions(html, "other", 55);
-  const h1 = rows.find((r) => r.type === "h1");
-  assert.ok(h1);
-  assert.equal(h1!.current, "Build skills together");
-  assert.ok(!h1!.current.includes("<"));
+  const kinds = rows.map((r) => r.type).sort();
+  assert.deepEqual(kinds, ["contentClarity", "conversionPath", "trustAndProof"].sort());
+  assert.ok(rows.every((r) => !r.current.includes("<")));
 });
 
 test("low-confidence neutral path avoids heavy sales or revenue framing", () => {
@@ -25,18 +24,16 @@ test("low-confidence neutral path avoids heavy sales or revenue framing", () => 
   assert.ok(!/revenue|conversion-focused|buy now/i.test(joined));
 });
 
-test("education and community signals produce non-salesy suggestions", () => {
+test("education/community content avoids hard sales claims in suggestions", () => {
   const html = `<html><head><title>TechShala — Home</title>
     <meta name="description" content="Learn together"/></head><body>
     <h1>Welcome</h1>
     <p>Join our community courses and workshops for students.</p>
   </body></html>`;
   const rows = generateContentSuggestions(html, "other", 60);
-  const title = rows.find((r) => r.type === "title");
-  assert.ok(title);
-  assert.ok(/course|workshop|community|learn/i.test(title!.suggested));
-  assert.ok(!/leads|revenue|conversion/i.test(title!.suggested));
-  assert.ok(/education|community|learning|participation/i.test(title!.reason));
+  const joined = rows.map((r) => `${r.suggested} ${r.reason}`).join(" ");
+  assert.ok(!/buy now|hard sell|instant revenue/i.test(joined));
+  assert.ok(/content|conversion|trust|proof|audience|service/i.test(joined));
 });
 
 test("confidence is computed and identical for the same inputs", () => {
@@ -90,73 +87,14 @@ test("normal page with the word error does not trigger error-page fallback", () 
   assert.ok(rows.every((r) => !/could not be audited right now|page unavailable during scan/i.test(r.suggested)));
 });
 
-test("service-company title is not rewritten into generic ecommerce headline", () => {
+test("degraded fallback marker triggers recovery guidance", () => {
   const html = `
     <html>
-      <head>
-        <title>Hertzsoft Technologies | Web & Mobile App Development Company in Mumbai</title>
-        <meta name="description" content="Custom web and mobile app development services in Mumbai." />
-      </head>
-      <body>
-        <h1>Web and Mobile App Development Services</h1>
-        <p>We build software products for startups and enterprises.</p>
-      </body>
+      <head><title>https://example.com</title></head>
+      <body><main>degraded-fallback</main></body>
     </html>
   `;
-
-  const rows = generateContentSuggestions(html, "ecommerce", 88);
-  const title = rows.find((r) => r.type === "title");
-  const meta = rows.find((r) => r.type === "metaDescription");
-  const h1 = rows.find((r) => r.type === "h1");
-  assert.ok(title);
-  assert.ok(meta);
-  assert.ok(h1);
-  assert.ok(!/top ecommerce website/i.test(title!.suggested));
-  assert.ok(/hertzsoft|web|mobile app|development|mumbai/i.test(title!.suggested));
-  assert.ok(!/explain your offer/i.test(meta!.suggested));
-  assert.ok(/hertzsoft|development|mumbai/i.test(meta!.suggested));
-  assert.ok(!/a clear headline:/i.test(h1!.suggested));
-  assert.ok(/hertzsoft|web|mobile app|development|mumbai/i.test(h1!.suggested));
+  const rows = generateContentSuggestions(html, "other", 45);
+  assert.ok(rows.every((r) => r.current === "Missing"));
+  assert.ok(rows.every((r) => /could not be audited|unavailable|could not read/i.test(r.suggested)));
 });
-
-test("same-but-better policy keeps strong title and h1 close to original wording", () => {
-  const html = `
-    <html>
-      <head>
-        <title>Hertzsoft Technologies | Web & Mobile App Development Company in Mumbai</title>
-        <meta name="description" content="Hertzsoft Technologies: Mumbai" />
-      </head>
-      <body>
-        <h1>Transform Your Business With Cutting-Edge Software Solutions</h1>
-      </body>
-    </html>
-  `;
-
-  const rows = generateContentSuggestions(html, "ecommerce", 90);
-  const title = rows.find((r) => r.type === "title");
-  const meta = rows.find((r) => r.type === "metaDescription");
-  const h1 = rows.find((r) => r.type === "h1");
-
-  assert.ok(title && meta && h1);
-  assert.ok(overlap(title!.current, title!.suggested) >= 0.6);
-  assert.ok(overlap(h1!.current, h1!.suggested) >= 0.5);
-  assert.ok(meta!.suggested.length > meta!.current.length);
-  assert.ok(/hertzsoft|development|mumbai/i.test(meta!.suggested));
-});
-
-function overlap(a: string, b: string): number {
-  const tokenize = (s: string) =>
-    new Set(
-      s
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w.length >= 4)
-    );
-  const A = tokenize(a);
-  const B = tokenize(b);
-  if (!A.size || !B.size) return 0;
-  let inter = 0;
-  for (const x of A) if (B.has(x)) inter++;
-  return inter / A.size;
-}

@@ -31,6 +31,27 @@ async function safeGoto(page: import("puppeteer").Page, url: string, navTimeoutM
   await new Promise((r) => setTimeout(r, settleMs));
 }
 
+async function warmupLazyLoadedSections(page: import("puppeteer").Page) {
+  try {
+    await page.evaluate(async () => {
+      const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+      const viewportHeight = window.innerHeight || 800;
+      const maxY = Math.max(0, document.documentElement.scrollHeight - viewportHeight);
+      if (maxY <= 0) return;
+
+      const step = Math.max(300, Math.floor(viewportHeight * 0.75));
+      for (let y = 0; y <= maxY; y += step) {
+        window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+        await wait(90);
+      }
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+      await wait(120);
+    });
+  } catch {
+    // Keep screenshot stage resilient even if warm-up script fails on strict pages.
+  }
+}
+
 async function tryCapture(
   page: import("puppeteer").Page,
   url: string,
@@ -39,7 +60,15 @@ async function tryCapture(
 ): Promise<string | undefined> {
   try {
     await safeGoto(page, url, navTimeoutMs, settleMs);
-    const raw = ((await page.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
+    await warmupLazyLoadedSections(page);
+    let image: Buffer;
+    try {
+      image = (await page.screenshot({ type: "png", fullPage: true })) as Buffer;
+    } catch {
+      // Some pages fail fullPage capture because of memory/layout constraints.
+      image = (await page.screenshot({ type: "png", fullPage: false })) as Buffer;
+    }
+    const raw = image.toString("base64");
     return `data:image/png;base64,${raw}`;
   } catch {
     return undefined;

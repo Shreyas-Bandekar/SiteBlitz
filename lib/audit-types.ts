@@ -65,6 +65,10 @@ export type BenchmarkSite = {
   auditedDate: string;
   sourceType: "pre-audited" | "live";
   lastUpdated: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
 };
 
 export type CompetitorComparison = {
@@ -88,7 +92,7 @@ export type ROIResult = {
 };
 
 export type ContentFix = {
-  type: "title" | "metaDescription" | "h1";
+  type: "contentClarity" | "conversionPath" | "trustAndProof";
   current: string;
   suggested: string;
   reason: string;
@@ -124,6 +128,21 @@ export type LiveCompetitorAudit = {
   url: string;
   score: number;
   timestamp: string;
+  audited?: string;
+  sourceType?: "live" | "pre-audited";
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
+};
+
+export type LocationSignals = {
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
+  confidence: number;
+  matchedSignals: string[];
 };
 
 export type AnalyticsSignal = {
@@ -153,7 +172,7 @@ export type TrustData = {
   factors: string[];
 };
 
-export type GeminiInsights = {
+export type GroqInsights = {
   summary: string;
   quickWins: string[];
   trustScore: number;
@@ -163,6 +182,8 @@ export type GeminiInsights = {
   sourceMode?: "real" | "fallback" | "skipped";
   evidenceSnippet?: string[];
 };
+
+export type GeminiInsights = GroqInsights;
 
 export type ManualRoadmap = {
   summary: string;
@@ -270,7 +291,8 @@ export type AuditReport = {
     /** True when blocked response, degraded fallback, or critical scan gaps */
     scanBlockedOrDegraded?: boolean;
   trustData?: TrustData;
-  geminiInsights?: GeminiInsights;
+  geminiInsights?: GroqInsights;
+  groqInsights?: GroqInsights;
   roadmap?: ManualRoadmap;
   leadGen?: LeadGenScan;
   deterministic?: boolean;
@@ -287,8 +309,9 @@ export type AuditReport = {
     avgOrderValue: number;
     dataSource: string;
   };
+  targetLocation?: LocationSignals;
   industry?: IndustryDetection;
   liveDataSources?: LiveDataSource[];
-  dbStatus?: "saved" | "failed";
+  dbStatus?: "saved" | "failed" | "skipped";
   dbError?: string | null;
 };

@@ -67,6 +67,23 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
       ? Math.round(report.competitors.reduce((sum, c) => sum + c.score, 0) / report.competitors.length)
       : null;
 
+  // Keep manual score-table values accurate even when optional manual fields are not populated.
+  const derivedUxScore = typeof report.uxScore === "number" ? report.uxScore : report.scores.uiux;
+  const derivedLeadScore =
+    typeof report.leadGenAnalysis?.score === "number"
+      ? report.leadGenAnalysis.score
+      : report.scores.leadConversion;
+
+  const derivedUxIssues = report.manualRulesIssues?.length
+    ? typeof report.uxIssuesCount === "number"
+      ? report.manualRulesIssues.slice(0, Math.max(0, report.uxIssuesCount))
+      : report.manualRulesIssues
+    : (report.issues || []).filter((i) => i.category === "uiux").map((i) => i.detail);
+
+  const derivedLeadIssues = report.leadGenAnalysis?.issues?.length
+    ? report.leadGenAnalysis.issues
+    : (report.issues || []).filter((i) => i.category === "leadConversion").map((i) => i.detail);
+
   return (
     <div className="mt-8 space-y-8">
       {/* Top Overview Section */}
@@ -144,11 +161,11 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
                 </div>
               )}
               <ScoreTable
-                uxIssues={report.manualRulesIssues?.filter((_, i) => i < (report.uxIssuesCount ?? 0)) ?? []}
-                leadIssues={report.leadGenAnalysis?.issues ?? []}
+                uxIssues={derivedUxIssues}
+                leadIssues={derivedLeadIssues}
                 deviceResults={report.deviceResults}
-                uxScore={report.uxScore}
-                leadScore={report.leadGenAnalysis?.score}
+                uxScore={derivedUxScore}
+                leadScore={derivedLeadScore}
               />
             </>
           )}
