@@ -275,6 +275,12 @@ export type AuditReport = {
   leadGen?: LeadGenScan;
   deterministic?: boolean;
   roiSource?: string;
+  competitorBenchmarkStatus?: {
+    available: boolean;
+    sampleSize: number;
+    source: "live-history" | "cache" | "none";
+    message: string;
+  };
   trafficEstimate?: {
     traffic: number;
     conversionRate: number;

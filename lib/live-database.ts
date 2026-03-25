@@ -1,7 +1,20 @@
 import { sql } from "@vercel/postgres";
-import type { LiveAuditHistory } from "./audit-types";
+import type { BenchmarkSite, IndustryCategory, LiveAuditHistory } from "./audit-types";
+
+function hasPostgresConnection(): boolean {
+  return Boolean(
+    process.env.POSTGRES_URL ||
+      process.env.POSTGRES_PRISMA_URL ||
+      process.env.POSTGRES_URL_NON_POOLING
+  );
+}
+
+export function isLiveDatabaseEnabled(): boolean {
+  return hasPostgresConnection();
+}
 
 export async function initLiveSchema() {
+  if (!hasPostgresConnection()) return;
   await sql`
     CREATE TABLE IF NOT EXISTS siteblitz_audits (
       id TEXT PRIMARY KEY,
@@ -33,6 +46,7 @@ export async function saveLiveAudit(report: {
   pipeline: unknown;
   status: string;
 }) {
+  if (!hasPostgresConnection()) return;
   await initLiveSchema();
   await sql`
     INSERT INTO siteblitz_audits (id, url, industry, scores, issues, recommendations, competitors, analytics, roi, pipeline, status, timestamp)
@@ -54,6 +68,7 @@ export async function saveLiveAudit(report: {
 }
 
 export async function getLiveAuditHistory(url: string, limit = 10): Promise<LiveAuditHistory[]> {
+  if (!hasPostgresConnection()) return [];
   await initLiveSchema();
   const result = await sql`
     SELECT id, url, scores, timestamp
@@ -69,4 +84,56 @@ export async function getLiveAuditHistory(url: string, limit = 10): Promise<Live
     scores: row.scores as LiveAuditHistory["scores"],
     timestamp: new Date(row.timestamp as string).toISOString(),
   }));
+}
+
+export async function getRecentIndustryBenchmarks(
+  industry: IndustryCategory,
+  limit = 24
+): Promise<BenchmarkSite[]> {
+  if (!hasPostgresConnection()) return [];
+  await initLiveSchema();
+  const result = await sql`
+    SELECT url, scores, timestamp
+    FROM siteblitz_audits
+    WHERE industry = ${industry}
+      AND status = 'live-complete'
+    ORDER BY timestamp DESC
+    LIMIT ${limit}
+  `;
+
+  const deduped = new Map<string, BenchmarkSite>();
+
+  for (const row of result.rows) {
+    const rawUrl = String(row.url || "");
+    if (!rawUrl) continue;
+
+    let hostname = "";
+    try {
+      hostname = new URL(rawUrl).hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      continue;
+    }
+    if (!hostname || deduped.has(hostname)) continue;
+
+    const scores = (row.scores || {}) as Record<string, unknown>;
+    const overall = Number(scores.overall ?? 0);
+    const mobile = Number(scores.mobile ?? 0);
+    const seo = Number(scores.seo ?? 0);
+
+    if (!Number.isFinite(overall) || overall <= 0) continue;
+
+    const iso = new Date(String(row.timestamp)).toISOString();
+    deduped.set(hostname, {
+      name: hostname.split(".")[0] || hostname,
+      url: rawUrl,
+      overall: Math.round(overall),
+      mobile: Number.isFinite(mobile) ? Math.round(mobile) : 0,
+      seo: Number.isFinite(seo) ? Math.round(seo) : 0,
+      auditedDate: iso.split("T")[0],
+      sourceType: "live",
+      lastUpdated: iso,
+    });
+  }
+
+  return [...deduped.values()];
 }

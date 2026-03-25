@@ -4,15 +4,16 @@ import { generateRoadmap } from "../../../lib/manual-roadmap";
 import { calculateTrust } from "../../../lib/trust-calculator";
 import crypto from "crypto";
 import { extractLiveAnalytics } from "../../../lib/live-analytics";
-import { saveLiveAudit, getLiveAuditHistory } from "../../../lib/live-database";
+import { saveLiveAudit, getLiveAuditHistory, isLiveDatabaseEnabled } from "../../../lib/live-database";
 import { improveIndustryDetectionWithMetrics } from "../../../lib/content-industry";
 import { getLiveBenchmarks } from "../../../lib/live-benchmarks";
+import { detectShlokLocationSignals as detectLocationSignals } from "../../../lib/shlok-location-detection";
 import { calculateLiveROI, getFreeTrafficEstimate } from "../../../lib/free-roi";
 import { makeTrustMeta, calculateTrustBreakdown } from "../../../lib/trust";
-import type { StageTraceEntry, IndustryCategory, TrustMeta } from "../../../lib/audit-types";
+import type { StageTraceEntry, IndustryCategory, TrustMeta, BenchmarkSite } from "../../../lib/audit-types";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -43,18 +44,39 @@ export async function POST(req: Request) {
       )
     );
 
-    // NEW: Live benchmarks from local cache + fresh audits
-    const benchmarks = flags.enrichCompetitors
-      ? await runRouteStage(stageTrace, auditId, url, "live-benchmarks", async () =>
-          await getLiveBenchmarks(contentIndustry.category as IndustryCategory)
-        )
-      : [];
+    const targetLocation = await runRouteStage(stageTrace, auditId, url, "location-detection", async () =>
+      detectLocationSignals(pipelineResult.rawHtml || "", url)
+    );
 
-    const competitors = benchmarks.map(b => ({
+    // NEW: Live benchmarks from local cache + fresh audits
+    const benchmarks = await runRouteStage(stageTrace, auditId, url, "live-benchmarks", async () =>
+      await getLiveBenchmarks(contentIndustry.category as IndustryCategory, { targetUrl: url, limit: 6 })
+    );
+
+    const filteredBenchmarks = benchmarks;
+    const sanitizedBenchmarks = filterIrrelevantCompetitors(url, filteredBenchmarks);
+    const limitedBenchmarks = sanitizedBenchmarks.slice(0, 3);
+    const competitorBenchmarkStatus =
+      limitedBenchmarks.length > 0
+        ? {
+            available: true,
+            sampleSize: limitedBenchmarks.length,
+            source: limitedBenchmarks.some((b) => b.sourceType === "live") ? "live-history" : "cache",
+            message: `Loaded ${limitedBenchmarks.length} real benchmark ${limitedBenchmarks.length === 1 ? "site" : "sites"}.`,
+          }
+        : {
+            available: false,
+            sampleSize: 0,
+            source: "none",
+            message: "No real competitor benchmarks found yet. Audit 2-3 competitor URLs first, then rerun this scan.",
+          };
+
+    const competitors = limitedBenchmarks.map(b => ({
       url: b.url,
       score: b.overall,
+      timestamp: b.lastUpdated || new Date().toISOString(),
       audited: b.auditedDate,
-      sourceType: b.sourceType as "live" | "pre-audited"
+      sourceType: b.sourceType as "live" | "pre-audited",
     }));
 
     const analytics = await runRouteStage(stageTrace, auditId, url, "analytics", async () =>
@@ -75,48 +97,54 @@ export async function POST(req: Request) {
       return { roi, reason: roi ? undefined : "Unable to calculate ROI" };
     });
 
-    let dbStatus: "saved" | "failed" = "saved";
+    let dbStatus: "saved" | "failed" | "skipped" = "saved";
     let dbError: string | null = null;
     let history: Array<{ id: string; url: string; scores: unknown; timestamp: string }> = [];
-    try {
-      await runRouteStage(stageTrace, auditId, url, "db", async () => await saveLiveAudit({
-        id: auditId,
-        url: pipelineResult.url,
-        industry: contentIndustry.category,
-        scores: pipelineResult.scores,
-        issues: pipelineResult.issues,
-        recommendations: pipelineResult.recommendations,
-        competitors,
-        analytics,
-        roi: roiOutput.roi,
-        pipeline: pipelineResult.pipeline,
-        status: "live-complete",
-      }));
-      history = await runRouteStage(stageTrace, auditId, url, "db-history", async () => await getLiveAuditHistory(pipelineResult.url, 7));
-    } catch (error) {
-      dbStatus = "failed";
-      dbError = error instanceof Error ? error.message : "db error";
-      stageTrace.push({
-        stage: "db",
-        startedAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
-        durationMs: 0,
-        status: "failed",
-        error: dbError,
-      });
-      if (flags.strictDb) {
-        return Response.json(
-          {
-            status: "live-failed",
-            isLive: false,
-            failedStage: "db",
-            message: dbError,
-            elapsedMs: Date.now() - startedAt,
-            stageTrace,
-          },
-          { status: 500 }
-        );
+    const dbEnabled = isLiveDatabaseEnabled();
+    if (dbEnabled) {
+      try {
+        await runRouteStage(stageTrace, auditId, url, "db", async () => await saveLiveAudit({
+          id: auditId,
+          url: pipelineResult.url,
+          industry: contentIndustry.category,
+          scores: pipelineResult.scores,
+          issues: pipelineResult.issues,
+          recommendations: pipelineResult.recommendations,
+          competitors,
+          analytics,
+          roi: roiOutput.roi,
+          pipeline: pipelineResult.pipeline,
+          status: "live-complete",
+        }));
+        history = await runRouteStage(stageTrace, auditId, url, "db-history", async () => await getLiveAuditHistory(pipelineResult.url, 7));
+      } catch (error) {
+        dbStatus = "failed";
+        dbError = error instanceof Error ? error.message : "db error";
+        stageTrace.push({
+          stage: "db",
+          startedAt: new Date().toISOString(),
+          endedAt: new Date().toISOString(),
+          durationMs: 0,
+          status: "failed",
+          error: dbError,
+        });
+        if (flags.strictDb) {
+          return Response.json(
+            {
+              status: "live-failed",
+              isLive: false,
+              failedStage: "db",
+              message: dbError,
+              elapsedMs: Date.now() - startedAt,
+              stageTrace,
+            },
+            { status: 500 }
+          );
+        }
       }
+    } else {
+      dbStatus = "skipped";
+      dbError = "Database integration disabled (POSTGRES_URL not configured).";
     }
 
     const trustByField: Record<string, TrustMeta> = { ...(pipelineResult.trustByField || {}) };
@@ -145,9 +173,11 @@ export async function POST(req: Request) {
 
     trustByField.competitor_benchmarks = makeTrustMeta(
       competitors,
-      flags.enrichCompetitors && benchmarks.length > 0 ? "ESTIMATED" : "FALLBACK",
-      flags.enrichCompetitors ? "Cached live benchmarks + audits" : "Competitor enrichment not requested (fast mode)",
-      flags.enrichCompetitors && benchmarks.length > 0 ? 0.72 : 0.34
+      limitedBenchmarks.length > 0 ? "ESTIMATED" : "FALLBACK",
+      limitedBenchmarks.some((b) => b.sourceType === "live")
+        ? "Real benchmark data from live audit history"
+        : "Cached benchmark data from previous real audits",
+      limitedBenchmarks.length > 0 ? (flags.enrichCompetitors ? 0.72 : 0.56) : 0.34
     );
 
     const trustValues = Object.values(trustByField);
@@ -176,8 +206,13 @@ export async function POST(req: Request) {
       pipelineResult.scores
     );
 
+    const deterministicQuickWins = pipelineResult.recommendations
+      .map((r) => String(r.action || "").trim())
+      .filter((x) => x.length > 0)
+      .slice(0, 3);
+
     const geminiInsights = flags.enrichAi
-      ? await runRouteStage(stageTrace, auditId, url, "gemini-report", async () =>
+      ? await runRouteStage(stageTrace, auditId, url, "groq-report", async () =>
           await getGeminiInsights(
             {
               issues: pipelineResult.manualRulesIssues ?? [],
@@ -192,7 +227,14 @@ export async function POST(req: Request) {
         )
       : {
           summary: `Trust ${trustData.trustScore}/100. Fast mode skipped AI enrichment.`,
-          quickWins: ["Add contact form", "Fix tiny fonts", "3x hero CTAs"],
+          quickWins:
+            deterministicQuickWins.length > 0
+              ? deterministicQuickWins
+              : [
+                  "Apply the top deterministic recommendation from this audit",
+                  "Fix the highest-priority conversion blocker and rerun audit",
+                  "Validate improvements using a second live scan",
+                ],
           trustScore: trustData.trustScore,
           working: true,
           fallback: "Fast Mode (AI Skipped)",
@@ -214,18 +256,25 @@ export async function POST(req: Request) {
       trustByField,
       overallTrustScore,
       trustBreakdown,
-      pipeline: [...pipelineResult.pipeline, flags.enrichCompetitors ? "live-benchmarks" : "live-benchmarks:skipped", "traffic-estimate", "live-db"],
+      pipeline: [
+        ...pipelineResult.pipeline,
+        flags.enrichCompetitors ? "live-benchmarks" : "live-benchmarks:cached",
+        "traffic-estimate",
+        "live-db",
+      ],
       competitors,
+      competitorBenchmarkStatus,
       competitorSources: benchmarks.map(b => ({
         url: b.url,
         sourceType: b.sourceType,
-        auditedDate: b.auditedDate
+        auditedDate: b.auditedDate,
       })),
       analytics,
       roi: roiOutput.roi,
       roiReason: roiOutput.reason,
       roiSource: trafficEstimate.dataSource,
       trafficEstimate,
+      targetLocation,
       industry: contentIndustry,
       history,
       isLive: true,
@@ -260,6 +309,51 @@ export async function POST(req: Request) {
   }
 }
 
+function hostFromUrl(input: string): string {
+  try {
+    return new URL(input).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function isGlobalPlatformHost(host: string): boolean {
+  const GLOBAL_PLATFORM_HOSTS = new Set([
+    "youtube.com",
+    "facebook.com",
+    "instagram.com",
+    "twitter.com",
+    "x.com",
+    "linkedin.com",
+    "wikipedia.org",
+    "pinterest.com",
+    "reddit.com",
+    "google.com",
+    "tiktok.com",
+  ]);
+  return GLOBAL_PLATFORM_HOSTS.has(host);
+}
+
+function filterIrrelevantCompetitors(
+  targetUrl: string,
+  candidates: BenchmarkSite[]
+): BenchmarkSite[] {
+  const targetHost = hostFromUrl(targetUrl);
+  const targetIsPlatform = isGlobalPlatformHost(targetHost);
+
+  const cleaned = candidates.filter((c) => {
+    const host = hostFromUrl(c.url);
+    if (!host) return false;
+    if (host === targetHost) return false;
+    if (!targetIsPlatform && isGlobalPlatformHost(host)) return false;
+    return true;
+  });
+
+  const preferred = cleaned.filter((c) => c.sourceType === "live");
+  const ranked = [...(preferred.length > 0 ? preferred : cleaned)].sort((a, b) => b.overall - a.overall);
+  return ranked;
+}
+
 export function resolveEnrichmentFlags(input: {
   enrichCompetitors?: unknown;
   enrichAi?: unknown;
@@ -280,7 +374,7 @@ export function classifyFailedStage(message: string): "playwright" | "axe" | "mo
   if (text.includes("screenshot") || text.includes("puppeteer")) return "screenshot";
   if (text.includes("lighthouse")) return "lighthouse";
   if (text.includes("http-html") || text.includes("no usable live data") || text.includes("degraded-fallback")) return "http-html";
-  if (text.includes("ai stage")) return "ai";
+  if (text.includes("ai stage") || text.includes("groq") || text.includes("llm")) return "ai";
   if (text.includes("db") || text.includes("postgres")) return "db";
   if (text.includes("competitor")) return "competitors";
   return "unknown";
@@ -294,7 +388,7 @@ function mapTraceStageToFailedStage(stage: string | undefined): "playwright" | "
   if (stage === "playwright") return "playwright";
   if (stage === "db" || stage === "db-history") return "db";
   if (stage === "competitors" || stage === "live-benchmarks") return "competitors";
-  if (stage === "ai") return "ai";
+  if (stage === "ai" || stage === "groq-report") return "ai";
   if (stage === "mobile") return "mobile";
   if (stage === "axe") return "axe";
   return "unknown";

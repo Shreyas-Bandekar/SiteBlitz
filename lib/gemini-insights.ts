@@ -75,20 +75,72 @@ function dedupeWins(wins: string[]): string[] {
   return out;
 }
 
+function sanitizeActionText(text: string): string {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/^[-*•\d\).\s]+/, "")
+    .replace(/\s*[.;,:]+\s*$/, "")
+    .trim();
+}
+
+function hasUnsupportedClaim(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  return /(\$\d|\d+\s?%|\d+\s?(ms|kb|mb|gb|sec|seconds))/i.test(t);
+}
+
+function hasEvidenceOverlap(text: string, contextKeywords: Set<string>): boolean {
+  const tokens = tokenize(text);
+  if (!tokens.length) return false;
+  const overlaps = tokens.filter((t) => contextKeywords.has(t));
+  return overlaps.length >= 2;
+}
+
+function issueToAction(issue: string): string {
+  const clean = sanitizeActionText(issue);
+  if (!clean) return "";
+  if (/^no\s+/i.test(clean)) return `Add ${clean.replace(/^no\s+/i, "").toLowerCase()}`;
+  if (/^missing\s+/i.test(clean)) return `Add ${clean.replace(/^missing\s+/i, "").toLowerCase()}`;
+  if (/^too\s+/i.test(clean)) return `Reduce ${clean.replace(/^too\s+/i, "").toLowerCase()}`;
+  return `Fix: ${clean}`;
+}
+
+function buildDeterministicWins(auditData: GeminiAuditData): string[] {
+  const fromRecommendations = (auditData.recommendations || [])
+    .map((r) => sanitizeActionText(r?.action || ""))
+    .filter((x) => x.length >= 10);
+
+  const fromIssues = (auditData.issues || [])
+    .map((i) => issueToAction(String(i || "")))
+    .filter((x) => x.length >= 10);
+
+  return dedupeWins([...fromRecommendations, ...fromIssues]).slice(0, 3);
+}
+
+function buildDeterministicSummary(auditData: GeminiAuditData, trust: TrustData): string {
+  const topIssue = (auditData.issues || []).map((x) => sanitizeActionText(String(x || ""))).find(Boolean);
+  const recCount = (auditData.recommendations || []).filter((r) => sanitizeActionText(r?.action || "").length > 0).length;
+  if (topIssue) {
+    return `Trust ${trust.trustScore}/100. Focus first on: ${topIssue.slice(0, 130)}.`;
+  }
+  return `Trust ${trust.trustScore}/100. ${recCount} evidence-backed actions identified from this audit.`;
+}
+
 function qualityGateWins(
   modelWins: string[],
-  fallbackWins: string[],
+  deterministicWins: string[],
   contextKeywords: Set<string>
 ): string[] {
   const filtered = dedupeWins(modelWins)
+    .map((w) => sanitizeActionText(w))
     .filter((w) => w.length >= 20)
     .filter((w) => !isGenericWin(w))
-    .filter((w) => tokenize(w).some((t) => contextKeywords.has(t)));
+    .filter((w) => !hasUnsupportedClaim(w))
+    .filter((w) => hasEvidenceOverlap(w, contextKeywords));
 
   if (filtered.length >= 3) return filtered.slice(0, 3);
 
-  // Mix high-confidence model wins with deterministic fallback actions.
-  const mixed = dedupeWins([...filtered, ...fallbackWins]);
+  // Mix high-confidence model wins with deterministic evidence-backed actions.
+  const mixed = dedupeWins([...filtered, ...deterministicWins]);
   return mixed.slice(0, 3);
 }
 
@@ -121,16 +173,9 @@ function reconcileWithLeadEvidence(wins: string[], summary: string, auditData: G
 }
 
 export async function getGeminiInsights(auditData: GeminiAuditData, url: string, trust: TrustData): Promise<GeminiInsights> {
-  const fallbackQuickWins =
-    (auditData.recommendations || [])
-      .map((r) => r?.action?.trim())
-      .filter((v): v is string => Boolean(v))
-      .slice(0, 3);
-  const safeFallbackWins = fallbackQuickWins.length ? fallbackQuickWins : ["Improve above-fold CTA clarity", "Reduce friction on lead capture", "Strengthen trust signals near CTA"];
-  const topIssue = (auditData.issues || []).map((x) => String(x || "").trim()).find(Boolean);
-  const fallbackSummary = topIssue
-    ? `Trust ${trust.trustScore}/100. Top deterministic issue: ${topIssue.slice(0, 120)}.`
-    : `Trust ${trust.trustScore}/100. Manual rules detected ${(auditData?.issues?.length ?? 0)} fixes.`;
+  const deterministicWins = buildDeterministicWins(auditData);
+  const safeFallbackWins = deterministicWins.length ? deterministicWins : ["Review flagged issues and apply the top recommendation", "Improve conversion flow using detected friction points", "Re-run audit after implementing the first two fixes"];
+  const fallbackSummary = buildDeterministicSummary(auditData, trust);
   const timeoutMs = resolveTimeoutMs();
   const apiKey = resolveGroqApiKey();
   const model = resolveGroqModel();
@@ -227,10 +272,13 @@ export async function getGeminiInsights(auditData: GeminiAuditData, url: string,
     const parsedWins = Array.isArray(parsed?.quickWins) ? parsed.quickWins.slice(0, 6) : extractQuickWins(content);
     const gatedWins = qualityGateWins(parsedWins, safeFallbackWins, contextKeywords);
     const reconciled = reconcileWithLeadEvidence(gatedWins, rawSummary, auditData);
+    const finalSummary = hasEvidenceOverlap(reconciled.summary, contextKeywords)
+      ? reconciled.summary
+      : fallbackSummary;
     console.log("[ai:report:ok]", JSON.stringify({ provider: "groq", url, chars: content.length, trust: trust.trustScore }));
 
     return {
-      summary: reconciled.summary || fallbackSummary,
+      summary: finalSummary,
       quickWins: reconciled.wins.length ? reconciled.wins : safeFallbackWins,
       trustScore: trust.trustScore,
       sourceMode: "real",

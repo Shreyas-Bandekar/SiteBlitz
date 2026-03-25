@@ -1,6 +1,8 @@
 import { chromium, devices } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import * as cheerio from "cheerio";
+import { existsSync } from "node:fs";
+import * as path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { generateContentSuggestions } from "./audit-engine";
@@ -15,16 +17,18 @@ import { captureScreenshots } from "./screenshot";
 import { computeTrendsSummary } from "./trends";
 import { computeScores, prioritizeRecommendations, DETERMINISTIC_SCORES_TRUST_SOURCE } from "./scoring";
 import { makeTrustMeta } from "./trust";
+import { env } from "./env";
 import { analyzeUIUX } from "./ux-rules";
 import type { AuditReport, Issue, StageTraceEntry, TrustMeta } from "./audit-types";
 
 const execFileAsync = promisify(execFile);
-const PLAYWRIGHT_DESKTOP_TIMEOUT_MS = 15000;
-const AXE_TIMEOUT_MS = 10000;
-const MOBILE_TIMEOUT_MS = 12000;
-const SCREENSHOT_TIMEOUT_MS = 65000;
-const LIGHTHOUSE_TIMEOUT_MS = 45000;
-const HTML_FETCH_TIMEOUT_MS = 30000;
+const PLAYWRIGHT_DESKTOP_TIMEOUT_MS = 12000;
+const AXE_TIMEOUT_MS = 4000;
+const MOBILE_TIMEOUT_MS = 4500;
+const SCREENSHOT_TIMEOUT_MS = 14000;
+const LIGHTHOUSE_TIMEOUT_MS = 20000;
+const HTML_FETCH_TIMEOUT_MS = 9000;
+const PIPELINE_BUDGET_MS = 30000;
 
 function normalizeUrl(input: string) {
   const trimmed = input.trim();
@@ -79,6 +83,7 @@ export async function runAuditPipeline(
     scanBlockedOrDegraded: boolean;
   }
 > {
+  const pipelineStartedAt = Date.now();
   const url = normalizeUrl(rawUrl);
   if (!url) throw new Error("Invalid URL.");
 
@@ -103,10 +108,56 @@ export async function runAuditPipeline(
   let uxIssuesCount = 0;
   let leadGenResult: LeadGenResult | null = null;
   let deviceResults: Array<{ device: string; tapTargetsOk: boolean; smallTargets: number }> = [];
+  const fastLighthouseMode = options.includeAi === false;
 
-  const [playwrightResult, screenshotResult, lighthouseResult] = await Promise.allSettled([
-    runStageTrace(stageTrace, "playwright", async () =>
-      withTimeout(async () => {
+  let playwrightResult: PromiseSettledResult<void> = {
+    status: "rejected",
+    reason: new Error("playwright not executed"),
+  };
+  let screenshotResult: PromiseSettledResult<{ desktop?: string; mobile?: string } | undefined> = {
+    status: "fulfilled",
+    value: undefined,
+  };
+  let lighthouseResult: PromiseSettledResult<{ categories?: Record<string, { score: number }> }> = {
+    status: "rejected",
+    reason: new Error("lighthouse not executed"),
+  };
+
+  if (fastLighthouseMode) {
+    pipeline.push("fast-lighthouse-priority");
+    const [lhRes, htmlRes, fastScreenshotRes] = await Promise.allSettled([
+      runStageTrace(stageTrace, "lighthouse", async () =>
+        withTimeout(async () => {
+          pipeline.push("lighthouse");
+          return await runLighthouseCli(url);
+        }, Math.min(LIGHTHOUSE_TIMEOUT_MS, Math.max(2500, PIPELINE_BUDGET_MS - (Date.now() - pipelineStartedAt))), "lighthouse")
+      ),
+      runStageTrace(stageTrace, "http-html", async () =>
+        withTimeout(async () => await fetchHtmlFallback(url), HTML_FETCH_TIMEOUT_MS, "http-html")
+      ),
+      runStageTrace(stageTrace, "screenshot", async () =>
+        withTimeout(async () => {
+          pipeline.push("puppeteer-screenshot-fast");
+          return await captureScreenshots(url, {
+            navTimeoutMs: 9000,
+            settleMs: 800,
+            includeMobile: false,
+          });
+        }, Math.min(SCREENSHOT_TIMEOUT_MS, 14000), "screenshot")
+      ),
+    ]);
+
+    lighthouseResult = lhRes;
+    if (htmlRes.status === "fulfilled") {
+      desktopHtml = htmlRes.value;
+      mobileHtml = htmlRes.value;
+    }
+    screenshotResult = fastScreenshotRes;
+    playwrightResult = { status: "rejected", reason: new Error("playwright skipped in fast mode") };
+  } else {
+    [playwrightResult, screenshotResult, lighthouseResult] = await Promise.allSettled([
+      runStageTrace(stageTrace, "playwright", async () =>
+        withTimeout(async () => {
         const browser = await chromium.launch({ headless: true });
         try {
           const desktopCtx = await browser.newContext();
@@ -215,19 +266,20 @@ export async function runAuditPipeline(
         } finally {
           await browser.close();
         }
-      }, PLAYWRIGHT_DESKTOP_TIMEOUT_MS + AXE_TIMEOUT_MS + MOBILE_TIMEOUT_MS, "playwright")
-    ),
-    runStageTrace(stageTrace, "screenshot", async () => withTimeout(async () => {
-      pipeline.push("puppeteer-screenshot");
-      return await captureScreenshots(url);
-    }, SCREENSHOT_TIMEOUT_MS, "screenshot")),
-    runStageTrace(stageTrace, "lighthouse", async () => withTimeout(async () => {
-      pipeline.push("lighthouse");
-      return await runLighthouseCli(url);
-    }, LIGHTHOUSE_TIMEOUT_MS, "lighthouse")),
-  ]);
+        }, Math.min(PLAYWRIGHT_DESKTOP_TIMEOUT_MS + AXE_TIMEOUT_MS + MOBILE_TIMEOUT_MS, Math.max(2500, PIPELINE_BUDGET_MS - (Date.now() - pipelineStartedAt))), "playwright")
+      ),
+      runStageTrace(stageTrace, "screenshot", async () => {
+        pipeline.push("puppeteer-screenshot");
+        return await captureScreenshots(url);
+      }),
+      runStageTrace(stageTrace, "lighthouse", async () => withTimeout(async () => {
+        pipeline.push("lighthouse");
+        return await runLighthouseCli(url);
+      }, Math.min(LIGHTHOUSE_TIMEOUT_MS, Math.max(2500, PIPELINE_BUDGET_MS - (Date.now() - pipelineStartedAt))), "lighthouse")),
+    ]);
+  }
 
-  if (playwrightResult.status === "rejected") {
+  if (playwrightResult.status === "rejected" && !fastLighthouseMode) {
     playwrightFailed = true;
     issues.push(
       failIssue(
@@ -262,6 +314,16 @@ export async function runAuditPipeline(
     leadGenResult.issues.forEach(msg => {
       issues.push(failIssue("leadConversion", "Lead Gen Heuristic", msg, "medium"));
     });
+  }
+
+  if (!desktopHtml) {
+    const htmlFallback = await runStageTrace(stageTrace, "http-html", async () =>
+      await withTimeout(async () => await fetchHtmlFallback(url), HTML_FETCH_TIMEOUT_MS, "http-html")
+    ).catch((error) => {
+      throw withTrace(error, stageTrace);
+    });
+    desktopHtml = htmlFallback;
+    mobileHtml = htmlFallback;
   }
 
   if (screenshotResult.status === "rejected") {
@@ -302,17 +364,17 @@ export async function runAuditPipeline(
   }
 
   const screenshots = screenshotResult.status === "fulfilled" ? screenshotResult.value : undefined;
-  const screenshot = screenshots?.desktop;
-
-  const lighthousePerformance = Math.round(
-    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.performance?.score : 0) ?? 0) * 100
-  );
-  const lighthouseSeo = Math.round(
-    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.seo?.score : 0) ?? 0) * 100
-  );
-  const lighthouseAccessibility = Math.round(
-    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.accessibility?.score : 0) ?? 0) * 100
-  );
+  
+  // In fast mode, try to extract screenshots from Lighthouse output if available
+  let enhancedScreenshots = screenshots;
+  if (fastLighthouseMode && lighthouseResult.status === "fulfilled" && !screenshots) {
+    const lhScreenshot = (lighthouseResult.value as any)?.audits?.["full-page-screenshot"]?.details?.screenshot?.data;
+    if (lhScreenshot) {
+      enhancedScreenshots = { desktop: `data:image/webp;base64,${lhScreenshot}` };
+    }
+  }
+  
+  const screenshot = enhancedScreenshots?.desktop;
 
   const $ = cheerio.load(desktopHtml || "<html></html>");
   const m$ = cheerio.load(mobileHtml || desktopHtml || "<html></html>");
@@ -382,6 +444,42 @@ export async function runAuditPipeline(
     Math.max(0, 60 + (effectiveHasViewport ? 10 : 0) + (effectiveMobileTapTargetsOk ? 10 : 0) + (effectiveCtaCount > 0 ? 10 : 0) + (effectiveFormCount > 0 ? 10 : 0))
   );
 
+  let lighthousePerformance = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.performance?.score : 0) ?? 0) * 100
+  );
+  let lighthouseSeo = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.seo?.score : 0) ?? 0) * 100
+  );
+  let lighthouseAccessibility = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.accessibility?.score : 0) ?? 0) * 100
+  );
+  const lighthouseBestPractices = Math.round(
+    ((lighthouseResult.status === "fulfilled" ? lighthouseResult.value?.categories?.["best-practices"]?.score : 0) ?? 0) * 100
+  );
+
+  if (lighthouseResult.status !== "fulfilled") {
+    lighthousePerformance = estimatePerformanceFallback({
+      blockedResponseDetected,
+      hasViewport: effectiveHasViewport,
+      scriptCount,
+      domNodeCount,
+      customPerformanceSignal,
+    });
+    lighthouseSeo = estimateSeoFallback({
+      blockedResponseDetected,
+      titlePresent: effectiveTitlePresent,
+      metaDescriptionPresent: effectiveMetaDescriptionPresent,
+      h1Count: effectiveH1Count,
+      wordCount,
+    });
+    lighthouseAccessibility = estimateAccessibilityFallback({
+      blockedResponseDetected,
+      imgCount,
+      altCount,
+      axeIssueCount: issues.filter((i) => i.category === "accessibility").length,
+    });
+  }
+
   const scores = computeScores({
     lighthousePerformance,
     lighthouseSeo,
@@ -421,22 +519,22 @@ export async function runAuditPipeline(
       },
       axe: { violations: issues.filter((i) => i.category === "accessibility").length },
       html: (desktopHtml || mobileHtml).slice(0, 50000), // Safety cut
-      screenshots: screenshots,
+      screenshots: enhancedScreenshots,
       url,
       issues,
       leadData: leadGenResult,
     };
 
-    // Run Gemini AI and optional CV independently so one failure does not block the other.
+    // Run AI and optional CV independently so one failure does not block the other.
     const [aiSettled, cvSettled] = await Promise.allSettled([
-      runStageTrace(stageTrace, "ai", async () => await generatePerfectAuditInsights(rawData)),
-      runStageTrace(stageTrace, "cv-analysis", async () => await getCVScore(screenshot))
+      runStageTrace(stageTrace, "ai", async () => await withTimeout(async () => await generatePerfectAuditInsights(rawData), 8000, "ai")),
+      runStageTrace(stageTrace, "cv-analysis", async () => await withTimeout(async () => await getCVScore(screenshot), 8000, "cv-analysis"))
     ]);
 
     if (aiSettled.status === "fulfilled") {
       aiInsights = { ...aiSettled.value, source: "model" as const };
       aiStatus = "ok";
-      pipeline.push("ai:gemini");
+      pipeline.push("ai:groq");
     } else {
       aiStatus = "failed";
       console.warn("[audit:ai:failed]", aiSettled.reason instanceof Error ? aiSettled.reason.message : String(aiSettled.reason));
@@ -461,7 +559,7 @@ export async function runAuditPipeline(
     (i) => i.category === "accessibility" && /partially unavailable|limited/i.test(`${i.title} ${i.detail}`)
   );
   const lighthouseOk = lighthouseResult.status === "fulfilled";
-  const screenshotOk = Boolean(screenshots?.desktop || screenshots?.mobile);
+  const screenshotOk = Boolean(enhancedScreenshots?.desktop || enhancedScreenshots?.mobile);
   const scanBlockedOrDegraded =
     Boolean(blockedResponseDetected) || degraded || (playwrightFailed && lighthouseFailed);
 
@@ -510,9 +608,9 @@ export async function runAuditPipeline(
   trustByField.deterministic_scores = makeTrustMeta(scores, scoreLevel, DETERMINISTIC_SCORES_TRUST_SOURCE, scoreHint);
 
   trustByField.screenshots = makeTrustMeta(
-    { desktop: Boolean(screenshots?.desktop), mobile: Boolean(screenshots?.mobile) },
+    { desktop: Boolean(enhancedScreenshots?.desktop), mobile: Boolean(enhancedScreenshots?.mobile) },
     screenshotOk ? "VERIFIED" : "FALLBACK",
-    "Puppeteer viewport screenshot capture",
+    fastLighthouseMode && enhancedScreenshots?.desktop && !screenshots?.desktop ? "Lighthouse mobile screenshot" : "Puppeteer viewport screenshot capture",
     screenshotOk ? 0.93 : 0.32
   );
 
@@ -531,7 +629,7 @@ export async function runAuditPipeline(
   );
 
   if (aiInsights) {
-    trustByField.ai_insights = makeTrustMeta(aiInsights, "INFERRED", "Google Gemini 1.5-flash structured JSON", 0.62);
+    trustByField.ai_insights = makeTrustMeta(aiInsights, "INFERRED", `LLM ${env.OLLAMA_MODEL} structured JSON`, 0.62);
   }
 
   if (cvResult) {
@@ -565,7 +663,7 @@ export async function runAuditPipeline(
     deterministicNotes: ["Scores are deterministic from live tooling outputs."],
     pipeline,
     screenshot,
-    screenshots,
+    screenshots: enhancedScreenshots,
     seoDetails: {
       titleLength: titleText.length,
       metaLength: metaText.length,
@@ -645,25 +743,76 @@ async function runStageTrace<T>(trace: StageTraceEntry[], stage: string, fn: () 
 
 async function runLighthouseCli(url: string) {
   const chromePath = chromium.executablePath();
-  const { stdout } = await execFileAsync(
-    process.platform === "win32" ? "npx.cmd" : "npx",
-    [
-      "lighthouse",
-      url,
-      "--output=json",
-      "--output-path=stdout",
-      "--quiet",
-      "--only-categories=performance,seo,accessibility",
-      `--chrome-path=${chromePath}`,
-      "--chrome-flags=--headless --no-sandbox --disable-gpu --disable-dev-shm-usage",
-    ],
-    { maxBuffer: 20 * 1024 * 1024, timeout: 60000, env: process.env }
-  );
+  const args = [
+    url,
+    "--output=json",
+    "--output-path=stdout",
+    "--quiet",
+    "--only-categories=performance,seo,accessibility,best-practices",
+    `--chrome-path=${chromePath}`,
+    "--chrome-flags=--headless --no-sandbox --disable-gpu --disable-dev-shm-usage",
+  ];
+
+  let stdout = "";
+  const lighthouseCliJs = path.join(process.cwd(), "node_modules", "lighthouse", "cli", "index.js");
+  try {
+    const result = existsSync(lighthouseCliJs)
+      ? await execFileAsync(process.execPath, [lighthouseCliJs, ...args], {
+          cwd: process.cwd(),
+          maxBuffer: 20 * 1024 * 1024,
+          timeout: Math.min(21000, LIGHTHOUSE_TIMEOUT_MS + 1000),
+          env: process.env,
+        })
+      : await execFileAsync(
+          process.platform === "win32" ? "npx.cmd" : "npx",
+          ["lighthouse", ...args],
+          {
+            cwd: process.cwd(),
+            maxBuffer: 20 * 1024 * 1024,
+            timeout: Math.min(21000, LIGHTHOUSE_TIMEOUT_MS + 1000),
+            env: process.env,
+          }
+        );
+    stdout = result.stdout;
+  } catch (primaryError) {
+    const primaryStdout = extractExecStdout(primaryError);
+    if (primaryStdout && primaryStdout.includes("{")) {
+      stdout = primaryStdout;
+    } else {
+      const fallback = await (process.platform === "win32"
+        ? execFileAsync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `npx lighthouse ${args.map(quoteShellArg).join(" ")}`], {
+            cwd: process.cwd(),
+            maxBuffer: 20 * 1024 * 1024,
+            timeout: Math.min(21000, LIGHTHOUSE_TIMEOUT_MS + 1000),
+            env: process.env,
+          })
+        : execFileAsync("npx", ["lighthouse", ...args], {
+            cwd: process.cwd(),
+            maxBuffer: 20 * 1024 * 1024,
+            timeout: Math.min(21000, LIGHTHOUSE_TIMEOUT_MS + 1000),
+            env: process.env,
+          })
+      ).catch((fallbackError) => {
+        const fallbackStdout = extractExecStdout(fallbackError);
+        if (fallbackStdout && fallbackStdout.includes("{")) {
+          return { stdout: fallbackStdout } as { stdout: string };
+        }
+        const p = primaryError instanceof Error ? primaryError.message : String(primaryError);
+        const f = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(`lighthouse launch failed: primary=${p}; fallback=${f}`);
+      });
+      stdout = fallback.stdout;
+    }
+  }
 
   const trimmed = stdout.trim();
   const start = trimmed.indexOf("{");
   if (start < 0) throw new Error("lighthouse stage failed: output missing JSON payload");
-  return JSON.parse(trimmed.slice(start)) as { categories?: Record<string, { score: number }> };
+  const parsed = JSON.parse(trimmed.slice(start)) as {
+    categories?: Record<string, { score: number }>;
+    audits?: Record<string, { details?: { screenshot?: { data?: string } } }>;
+  };
+  return parsed;
 }
 
 async function fetchHtmlFallback(url: string): Promise<string> {
@@ -706,3 +855,63 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+function quoteShellArg(arg: string): string {
+  const v = String(arg ?? "");
+  if (v.length === 0) return '""';
+  if (!/[\s"^&|<>]/.test(v)) return v;
+  return `"${v.replace(/"/g, '\\"')}"`;
+}
+
+function extractExecStdout(error: unknown): string {
+  const e = error as { stdout?: unknown };
+  const s = typeof e?.stdout === "string" ? e.stdout : "";
+  return s;
+}
+
+function clampScore(v: number): number {
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+function estimatePerformanceFallback(input: {
+  blockedResponseDetected: boolean;
+  hasViewport: boolean;
+  scriptCount: number;
+  domNodeCount: number;
+  customPerformanceSignal: number;
+}): number {
+  if (input.blockedResponseDetected) return 15;
+  const scriptPenalty = Math.min(22, input.scriptCount * 0.35);
+  const domPenalty = Math.min(18, Math.max(0, (input.domNodeCount - 900) * 0.008));
+  const viewportBoost = input.hasViewport ? 6 : -8;
+  return clampScore(input.customPerformanceSignal + viewportBoost - scriptPenalty - domPenalty);
+}
+
+function estimateSeoFallback(input: {
+  blockedResponseDetected: boolean;
+  titlePresent: boolean;
+  metaDescriptionPresent: boolean;
+  h1Count: number;
+  wordCount: number;
+}): number {
+  if (input.blockedResponseDetected) return 10;
+  let score = 38;
+  if (input.titlePresent) score += 22;
+  if (input.metaDescriptionPresent) score += 20;
+  if (input.h1Count === 1) score += 12;
+  else if (input.h1Count > 1) score += 6;
+  if (input.wordCount >= 250) score += 8;
+  return clampScore(score);
+}
+
+function estimateAccessibilityFallback(input: {
+  blockedResponseDetected: boolean;
+  imgCount: number;
+  altCount: number;
+  axeIssueCount: number;
+}): number {
+  if (input.blockedResponseDetected) return 12;
+  const altRatio = input.imgCount > 0 ? input.altCount / input.imgCount : 1;
+  const base = 52 + altRatio * 32;
+  const issuePenalty = Math.min(25, input.axeIssueCount * 4);
+  return clampScore(base - issuePenalty);
+}

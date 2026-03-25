@@ -1,0 +1,22 @@
+[
+  {
+    "name": "ogilvy",
+    "url": "https://www.ogilvy.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 80,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T04:53:45.950Z"
+  },
+  {
+    "name": "wk",
+    "url": "https://www.wk.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 89,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T04:54:05.533Z"
+  }
+]

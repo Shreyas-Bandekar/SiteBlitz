@@ -1,21 +1,10 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { BenchmarkSite } from "./audit-types";
-import { runAuditPipeline } from "./audit-pipeline";
+import type { BenchmarkSite, IndustryCategory } from "./audit-types";
+import { getRecentIndustryBenchmarks } from "./live-database";
 
 const CACHE_DIR = path.join(process.cwd(), "data", "benchmarks");
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-const TOP_SITES = {
-  ecommerce: ["https://www.shopify.com", "https://www.woocommerce.com"],
-  saas: ["https://www.hubspot.com", "https://www.intercom.com"],
-  local_service: ["https://www.urbancompany.com", "https://www.housejoy.in"],
-  agency: ["https://www.ogilvy.com", "https://www.wk.com"],
-  media: ["https://www.bbc.com", "https://www.theguardian.com"],
-  nonprofit: ["https://www.unicef.org", "https://www.worldwildlife.org"],
-  manufacturing: ["https://www.siemens.com", "https://global.abb"],
-  other: ["https://www.wikipedia.org", "https://www.mozilla.org"],
-};
 
 async function ensureCacheDir() {
   try {
@@ -54,56 +43,50 @@ function isCacheFresh(timestamp: number): boolean {
 }
 
 export async function getLiveBenchmarks(
-  industry: keyof typeof TOP_SITES
+  industry: IndustryCategory,
+  opts?: { targetUrl?: string; limit?: number }
 ): Promise<BenchmarkSite[]> {
-  // Read from local cache
+  const maxItems = Math.max(1, Math.min(10, opts?.limit ?? 3));
+  const targetHost = hostFromUrl(opts?.targetUrl || "");
+
+  // Read from local cache and DB-backed live history.
   const cached = await readCache(industry);
   const fresh = cached.filter((b) => isCacheFresh(new Date(b.auditedDate).getTime()));
+  const industryLive = await getRecentIndustryBenchmarks(industry, 32);
 
-  // If we have fresh data, return it
-  if (fresh.length >= 2) {
-    return fresh;
+  // Prefer latest live industry records, then fresh cache, then stale cache.
+  const merged = dedupeByHost([
+    ...industryLive,
+    ...fresh,
+    ...cached,
+  ]).filter((b) => hostFromUrl(b.url) !== targetHost);
+
+  const ranked = merged
+    .filter((b) => Number.isFinite(b.overall) && b.overall > 0)
+    .sort((a, b) => b.overall - a.overall)
+    .slice(0, maxItems);
+
+  if (ranked.length > 0) {
+    await writeCache(industry, ranked);
   }
 
-  // Otherwise, audit top sites and cache
-  const sites = TOP_SITES[industry] || TOP_SITES.other;
-  const toAudit = sites.slice(0, 2);
+  return ranked;
+}
 
+function hostFromUrl(input: string): string {
   try {
-    const audited: BenchmarkSite[] = [];
-
-    for (const url of toAudit) {
-      try {
-        const report = await runAuditPipeline(url, { includeAi: false });
-
-        audited.push({
-          name: new URL(url).hostname.replace("www.", "").split(".")[0],
-          url,
-          overall: report.scores.overall,
-          mobile: report.scores.mobile,
-          seo: report.scores.seo,
-          auditedDate: new Date().toISOString().split("T")[0],
-          sourceType: "live",
-          lastUpdated: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.warn(`[LiveBenchmarks] Failed to audit ${url}:`, error);
-        // Continue with next site
-      }
-    }
-
-    // Combine with some cached data if available
-    const combined = [...audited, ...fresh.slice(0, Math.max(0, 3 - audited.length))];
-
-    // Save to cache
-    if (audited.length > 0) {
-      await writeCache(industry, combined);
-    }
-
-    return combined.slice(0, 3);
-  } catch (error) {
-    console.error("[LiveBenchmarks] Error auditing sites:", error);
-    // Fall back to cached data
-    return fresh.length > 0 ? fresh : cached;
+    return new URL(input).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
   }
+}
+
+function dedupeByHost(items: BenchmarkSite[]): BenchmarkSite[] {
+  const out = new Map<string, BenchmarkSite>();
+  for (const item of items) {
+    const host = hostFromUrl(item.url);
+    if (!host || out.has(host)) continue;
+    out.set(host, item);
+  }
+  return [...out.values()];
 }

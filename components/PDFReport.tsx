@@ -5,8 +5,24 @@ import type { TrustBreakdown, TrustLevel, TrustMeta } from "../lib/audit-types";
 import { trustBadgeLabel } from "../lib/trust";
 import type { jsPDF } from "jspdf";
 
+export type ReportSection =
+  | "radar"
+  | "diagnostics"
+  | "issues"
+  | "roadmap"
+  | "ai"
+  | "trust"
+  | "roi"
+  | "manualAudit"
+  | "friendlySummary";
+
 type Payload = {
   url: string;
+  userName?: string;
+  clientName?: string;
+  companyName?: string;
+  screenshot?: string;
+  screenshots?: { desktop?: string; mobile?: string };
   scores: Record<string, number>;
   issues: Array<{ category: string; title: string; detail: string; severity: string }>;
   recommendations: Array<{ priority: string; action: string; rationale: string }>;
@@ -48,6 +64,19 @@ const LINE = 13;
 const MAX_ISSUES = 12;
 const MAX_RECS = 10;
 const AI_SUMMARY_MAX = 700;
+
+const MANUAL_DEFAULT_SECTIONS: ReportSection[] = [
+  "radar",
+  "diagnostics",
+  "issues",
+  "roadmap",
+  "ai",
+  "trust",
+  "roi",
+  "manualAudit",
+];
+
+const AUTOMATIC_DEFAULT_SECTIONS: ReportSection[] = ["friendlySummary", "issues", "roadmap", "trust", "roi"];
 
 /** Same six dimensions as ScoreRadar.tsx */
 const RADAR_LABELS = ["UI/UX", "Performance", "Mobile", "Accessibility", "SEO", "Leads"] as const;
@@ -272,7 +301,56 @@ function addPageFooters(doc: jsPDF, margin: number) {
   }
 }
 
-export default function PDFReport({ payload }: { payload: Payload }) {
+function buildFriendlySummary(payload: Payload, overall: number, issueCount: number, recCount: number): string[] {
+  const worst = [
+    { name: "performance", value: Number(payload.scores.performance) || 0 },
+    { name: "seo", value: Number(payload.scores.seo) || 0 },
+    { name: "mobile", value: Number(payload.scores.mobile) || 0 },
+    { name: "accessibility", value: Number(payload.scores.accessibility) || 0 },
+    { name: "leads", value: Number(payload.scores.leadConversion) || 0 },
+  ].sort((a, b) => a.value - b.value)[0];
+
+  const healthLine =
+    overall >= 80
+      ? "Your website is in good shape and already performs better than most sites."
+      : overall >= 60
+      ? "Your website is functional, but a few weak areas are limiting growth."
+      : "Your website needs focused fixes to improve trust, speed, and conversions.";
+
+  const issueLine =
+    issueCount === 0
+      ? "No major technical issues were detected in this scan."
+      : `${issueCount} issue(s) were detected, and ${recCount} practical fix(es) were generated.`;
+
+  const focusLine = `Top focus area right now: ${worst.name.toUpperCase()} (${worst.value}/100).`;
+
+  const outcomeLine = payload.roi
+    ? `Estimated revenue upside after fixes: INR ${Math.round(payload.roi.monthlyUplift).toLocaleString("en-IN")} per month.`
+    : "Revenue estimate is not available for this run, but fixes are still prioritized by impact.";
+
+  return [healthLine, issueLine, focusLine, outcomeLine];
+}
+
+function imageFormatFromDataUrl(dataUrl: string): "PNG" | "JPEG" | "WEBP" {
+  const m = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);/i)?.[1]?.toLowerCase();
+  if (m === "jpeg" || m === "jpg") return "JPEG";
+  if (m === "webp") return "WEBP";
+  return "PNG";
+}
+
+export default function PDFReport({
+  payload,
+  mode = "manual",
+  selectedSections,
+  buttonLabel,
+  className,
+}: {
+  payload: Payload;
+  mode?: "manual" | "automatic";
+  selectedSections?: ReportSection[];
+  buttonLabel?: string;
+  className?: string;
+}) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [toast, setToast] = useState<{ kind: "error" | "success"; message: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -295,8 +373,16 @@ export default function PDFReport({ payload }: { payload: Payload }) {
     try {
       const { jsPDF } = await import("jspdf");
       const pre = preprocessForPdf(payload);
+      const sectionSet = new Set(
+        (selectedSections && selectedSections.length > 0)
+          ? selectedSections
+          : mode === "automatic"
+          ? AUTOMATIC_DEFAULT_SECTIONS
+          : MANUAL_DEFAULT_SECTIONS
+      );
       const radarVals = radarValuesFromScores(payload.scores);
       const overall = Math.round(Number(payload.scores.overall) || 0);
+      const friendlySummaryLines = buildFriendlySummary(payload, overall, payload.issues.length, payload.recommendations.length);
 
       const doc = new jsPDF({
         unit: "pt",
@@ -323,7 +409,8 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       setHeading();
       doc.setFontSize(24);
       ensure(40);
-      doc.text("SiteBlitz", MARGIN, ctx.y);
+      const reportBrand = (payload.companyName || "").trim() || "SiteBlitz";
+      doc.text(reportBrand, MARGIN, ctx.y);
       ctx.y += 26;
       doc.setFontSize(11);
       doc.setTextColor(90, 94, 102);
@@ -336,14 +423,23 @@ export default function PDFReport({ payload }: { payload: Payload }) {
 
       doc.setFontSize(15);
       doc.setTextColor(22, 22, 30);
-      doc.text("Website Audit Report", MARGIN, ctx.y);
+      doc.text("Professional Website Audit Report", MARGIN, ctx.y);
       ctx.y += 22;
       setBody();
       doc.setFontSize(10);
       const scanDate = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-      ensure(LINE * 4);
+      ensure(LINE * 6);
       doc.text(`Target: ${payload.url}`, MARGIN, ctx.y);
       ctx.y += LINE;
+      const preparedFor = payload.userName || payload.clientName;
+      if (preparedFor) {
+        doc.text(`Prepared for: ${preparedFor}`, MARGIN, ctx.y);
+        ctx.y += LINE;
+      }
+      if (payload.companyName) {
+        doc.text(`Company: ${payload.companyName}`, MARGIN, ctx.y);
+        ctx.y += LINE;
+      }
       doc.text(`Generated: ${scanDate}`, MARGIN, ctx.y);
       ctx.y += LINE + 10;
 
@@ -359,119 +455,173 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       doc.text(`Overall score: ${overall} / 100`, MARGIN + 14, ctx.y + 28);
       ctx.y += 56;
 
-      // --- Radar breakdown ---
-      setHeading();
-      doc.setFontSize(13);
-      ensure(28);
-      doc.text("Radar breakdown", MARGIN, ctx.y);
-      ctx.y += 8;
-      setBody();
-      doc.setFontSize(9);
-      doc.setTextColor(95, 99, 110);
-      const sub = doc.splitTextToSize(
-        "Six-pillar score profile (UI/UX, Performance, Mobile, Accessibility, SEO, Lead conversion) — aligned with the dashboard radar.",
-        textW
-      );
-      for (const line of sub) {
-        ensure(LINE);
-        doc.text(line, MARGIN, ctx.y);
-        ctx.y += LINE - 1;
+      // --- Website screenshot ---
+      const screenshotData = payload.screenshots?.desktop || payload.screenshot || payload.screenshots?.mobile;
+      if (screenshotData) {
+        setHeading();
+        doc.setFontSize(12);
+        ensure(22);
+        doc.text("Website screenshot", MARGIN, ctx.y);
+        ctx.y += 12;
+
+        const imgW = textW;
+        const imgH = Math.round((imgW * 9) / 16);
+        ensure(imgH + 20);
+        try {
+          doc.setDrawColor(220, 226, 236);
+          doc.roundedRect(MARGIN, ctx.y, imgW, imgH, 4, 4, "S");
+          doc.addImage(screenshotData, imageFormatFromDataUrl(screenshotData), MARGIN + 2, ctx.y + 2, imgW - 4, imgH - 4);
+          ctx.y += imgH + 14;
+        } catch {
+          setBody();
+          doc.setFontSize(9);
+          doc.text("Screenshot was captured but could not be embedded in this PDF format.", MARGIN, ctx.y + 12);
+          ctx.y += 24;
+        }
       }
-      ctx.y += 10;
 
-      ensure(340);
-      drawRadarChartPdf(ctx, radarVals, RADAR_LABELS, MARGIN);
-      drawRadarTablePdf(ctx, radarVals, RADAR_LABELS, MARGIN, textW);
-
-      // --- Core diagnostics summary ---
-      setHeading();
-      doc.setFontSize(12);
-      ensure(22);
-      doc.text("Core diagnostics summary", MARGIN, ctx.y);
-      ctx.y += 16;
-      setBody();
-      doc.setFontSize(10);
-      doc.setTextColor(48, 48, 58);
-      for (const line of doc.splitTextToSize(pre.diagnostics, textW)) {
-        ensure(LINE);
-        doc.text(line, MARGIN, ctx.y);
-        ctx.y += LINE;
-      }
-      ctx.y += 8;
-
-      // --- Key issues ---
-      setHeading();
-      doc.setFontSize(12);
-      ensure(22);
-      doc.text("Key issues detected", MARGIN, ctx.y);
-      ctx.y += 16;
-      setBody();
-      doc.setFontSize(9);
-      if (!pre.issues.length) {
-        ensure(LINE);
-        doc.text("No issues recorded for this export.", MARGIN, ctx.y);
-        ctx.y += LINE;
-      } else {
-        for (const it of pre.issues) {
-          const bullet = `• [${it.sev}] ${it.text}`;
-          for (const line of doc.splitTextToSize(bullet, textW)) {
+      if (sectionSet.has("friendlySummary")) {
+        setHeading();
+        doc.setFontSize(12);
+        ensure(22);
+        doc.text("Simple business summary", MARGIN, ctx.y);
+        ctx.y += 16;
+        setBody();
+        doc.setFontSize(10);
+        for (const line of friendlySummaryLines) {
+          for (const wrapped of doc.splitTextToSize(`• ${line}`, textW)) {
             ensure(LINE);
-            doc.text(line, MARGIN, ctx.y);
-            ctx.y += LINE - 1;
+            doc.text(wrapped, MARGIN, ctx.y);
+            ctx.y += LINE;
           }
           ctx.y += 2;
         }
+        ctx.y += 8;
       }
-      ctx.y += 6;
 
-      // --- Recommendations ---
-      setHeading();
-      doc.setFontSize(12);
-      ensure(22);
-      doc.text("Actionable roadmap", MARGIN, ctx.y);
-      ctx.y += 16;
-      setBody();
-      doc.setFontSize(9);
-      if (!pre.recs.length) {
-        ensure(LINE);
-        doc.text("No recommendations in this export.", MARGIN, ctx.y);
-        ctx.y += LINE;
-      } else {
-        for (const r of pre.recs) {
-          const bullet = `• [${r.pri}] ${r.text}`;
-          for (const line of doc.splitTextToSize(bullet, textW)) {
-            ensure(LINE);
-            doc.text(line, MARGIN, ctx.y);
-            ctx.y += LINE - 1;
-          }
-          ctx.y += 2;
+      if (sectionSet.has("radar")) {
+        // --- Radar breakdown ---
+        setHeading();
+        doc.setFontSize(13);
+        ensure(28);
+        doc.text("Radar breakdown", MARGIN, ctx.y);
+        ctx.y += 8;
+        setBody();
+        doc.setFontSize(9);
+        doc.setTextColor(95, 99, 110);
+        const sub = doc.splitTextToSize(
+          "Six-pillar score profile (UI/UX, Performance, Mobile, Accessibility, SEO, Lead conversion) — aligned with the dashboard radar.",
+          textW
+        );
+        for (const line of sub) {
+          ensure(LINE);
+          doc.text(line, MARGIN, ctx.y);
+          ctx.y += LINE - 1;
         }
-      }
-      ctx.y += 6;
+        ctx.y += 10;
 
-      // --- AI insights ---
-      setHeading();
-      doc.setFontSize(12);
-      ensure(22);
-      doc.text("AI insights (summary)", MARGIN, ctx.y);
-      ctx.y += 16;
-      setBody();
-      doc.setFontSize(10);
-      if (pre.aiShort) {
-        for (const line of doc.splitTextToSize(pre.aiShort, textW)) {
+        ensure(340);
+        drawRadarChartPdf(ctx, radarVals, RADAR_LABELS, MARGIN);
+        drawRadarTablePdf(ctx, radarVals, RADAR_LABELS, MARGIN, textW);
+      }
+
+      if (sectionSet.has("diagnostics")) {
+        // --- Core diagnostics summary ---
+        setHeading();
+        doc.setFontSize(12);
+        ensure(22);
+        doc.text("Core diagnostics summary", MARGIN, ctx.y);
+        ctx.y += 16;
+        setBody();
+        doc.setFontSize(10);
+        doc.setTextColor(48, 48, 58);
+        for (const line of doc.splitTextToSize(pre.diagnostics, textW)) {
           ensure(LINE);
           doc.text(line, MARGIN, ctx.y);
           ctx.y += LINE;
         }
-      } else {
-        ensure(LINE);
-        doc.text("No AI summary available for this run.", MARGIN, ctx.y);
-        ctx.y += LINE;
+        ctx.y += 8;
       }
-      ctx.y += 8;
+
+      if (sectionSet.has("issues")) {
+        // --- Key issues ---
+        setHeading();
+        doc.setFontSize(12);
+        ensure(22);
+        doc.text("Key issues detected", MARGIN, ctx.y);
+        ctx.y += 16;
+        setBody();
+        doc.setFontSize(9);
+        if (!pre.issues.length) {
+          ensure(LINE);
+          doc.text("No issues recorded for this export.", MARGIN, ctx.y);
+          ctx.y += LINE;
+        } else {
+          for (const it of pre.issues) {
+            const bullet = `• [${it.sev}] ${it.text}`;
+            for (const line of doc.splitTextToSize(bullet, textW)) {
+              ensure(LINE);
+              doc.text(line, MARGIN, ctx.y);
+              ctx.y += LINE - 1;
+            }
+            ctx.y += 2;
+          }
+        }
+        ctx.y += 6;
+      }
+
+      if (sectionSet.has("roadmap")) {
+        // --- Recommendations ---
+        setHeading();
+        doc.setFontSize(12);
+        ensure(22);
+        doc.text("Actionable roadmap", MARGIN, ctx.y);
+        ctx.y += 16;
+        setBody();
+        doc.setFontSize(9);
+        if (!pre.recs.length) {
+          ensure(LINE);
+          doc.text("No recommendations in this export.", MARGIN, ctx.y);
+          ctx.y += LINE;
+        } else {
+          for (const r of pre.recs) {
+            const bullet = `• [${r.pri}] ${r.text}`;
+            for (const line of doc.splitTextToSize(bullet, textW)) {
+              ensure(LINE);
+              doc.text(line, MARGIN, ctx.y);
+              ctx.y += LINE - 1;
+            }
+            ctx.y += 2;
+          }
+        }
+        ctx.y += 6;
+      }
+
+      if (sectionSet.has("ai")) {
+        // --- AI insights ---
+        setHeading();
+        doc.setFontSize(12);
+        ensure(22);
+        doc.text("AI insights (summary)", MARGIN, ctx.y);
+        ctx.y += 16;
+        setBody();
+        doc.setFontSize(10);
+        if (pre.aiShort) {
+          for (const line of doc.splitTextToSize(pre.aiShort, textW)) {
+            ensure(LINE);
+            doc.text(line, MARGIN, ctx.y);
+            ctx.y += LINE;
+          }
+        } else {
+          ensure(LINE);
+          doc.text("No AI summary available for this run.", MARGIN, ctx.y);
+          ctx.y += LINE;
+        }
+        ctx.y += 8;
+      }
 
       // --- Trust ---
-      if (pre.trustLine) {
+      if (sectionSet.has("trust") && pre.trustLine) {
         setHeading();
         doc.setFontSize(12);
         ensure(22);
@@ -488,7 +638,7 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       }
 
       // --- ROI ---
-      if (payload.roi) {
+      if (sectionSet.has("roi") && payload.roi) {
         setHeading();
         doc.setFontSize(12);
         ensure(22);
@@ -513,7 +663,7 @@ export default function PDFReport({ payload }: { payload: Payload }) {
       }
 
       // --- Manual Audit Report section ---
-      if (payload.manualRules && payload.manualRules.issues.length > 0) {
+      if (sectionSet.has("manualAudit") && payload.manualRules && payload.manualRules.issues.length > 0) {
         doc.addPage();
         ctx.y = MARGIN;
 
@@ -616,9 +766,9 @@ export default function PDFReport({ payload }: { payload: Payload }) {
         type="button"
         onClick={() => void exportPdf()}
         disabled={isGenerating}
-        className="whitespace-nowrap shrink-0 rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:pointer-events-none disabled:opacity-50"
+        className={className || "whitespace-nowrap shrink-0 rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:pointer-events-none disabled:opacity-50"}
       >
-        {isGenerating ? "Generating PDF…" : "Export PDF Report"}
+        {isGenerating ? "Generating PDF…" : (buttonLabel || "Export PDF Report")}
       </button>
 
       {toast ? (

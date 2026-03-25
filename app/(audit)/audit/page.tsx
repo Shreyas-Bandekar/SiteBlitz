@@ -227,23 +227,22 @@ export default function AuditPage() {
                     )}
                     <div className="space-y-2">
                       <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Recommended Quick Fixes</h4>
-                      <ul className="space-y-2 font-medium">
-                        {(report.geminiInsights?.quickWins ?? ["Add contact form", "Fix tiny fonts", "3x hero CTAs"]).map((w, i) => (
-                          <li key={i} className="flex gap-2 items-start">
-                            <span className="text-green-500 mt-0.5">✓</span>
-                            <span>{w}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      {report.geminiInsights?.quickWins?.length ? (
+                        <ul className="space-y-2 font-medium">
+                          {report.geminiInsights.quickWins.map((w, i) => (
+                            <li key={i} className="flex gap-2 items-start">
+                              <span className="text-green-500 mt-0.5">✓</span>
+                              <span>{w}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No evidence-backed quick fixes were available for this run.</p>
+                      )}
                     </div>
                   </div>
                 )}
 
-                <div className="flex justify-center md:justify-end mt-8">
-                  <Button variant="outline" className="gap-2 h-12 px-6 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:text-blue-500 bg-background transition-all">
-                    📄 Download Manual Report (Powered by AI)
-                  </Button>
-                </div>
               </div>
             )}
 
