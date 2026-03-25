@@ -12,9 +12,10 @@ import ScoreRadar from "./ScoreRadar";
 import ScreenshotCard from "./ScreenshotCard";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
 import { Badge } from "./ui/Badge";
-import { Target, TrendingUp, AlertTriangle } from "lucide-react";
+import { Target, TrendingUp, AlertTriangle, Loader2, Palette } from "lucide-react";
 import { ScoreTable } from "./ManualAuditPanel";
 import CompetitorLiveTable from "./CompetitorLiveTable";
+import MockupPreview from "./MockupPreview";
 
 function contentFixLabel(kind: string): string {
   if (kind === "contentClarity") return "Content Clarity";
@@ -49,6 +50,32 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
   const [manualReportSections, setManualReportSections] = useState<ReportSection[]>(MANUAL_REPORT_DEFAULT_SELECTION);
   const [reportUserName, setReportUserName] = useState("");
   const [reportCompanyName, setReportCompanyName] = useState("");
+
+  const [mockupStatus, setMockupStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [mockupData, setMockupData] = useState<{ mockupData: any; fallbackUsed?: boolean; error?: string; } | null>(null);
+
+  const generateMockup = async () => {
+    try {
+      setMockupStatus("loading");
+      const res = await fetch("/api/mockup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: report.url,
+          issues: report.issues,
+          score: report.scores.overall,
+          html: report.rawHtml
+        }),
+      });
+      if (!res.ok) throw new Error("API Error");
+      const data = await res.json();
+      setMockupData(data);
+      setMockupStatus("success");
+    } catch (e) {
+      console.error(e);
+      setMockupStatus("error");
+    }
+  };
 
   const toggleReportSection = (section: ReportSection) => {
     setManualReportSections((prev) =>
@@ -93,7 +120,26 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 shrink-0 flex-wrap justify-center">
-              <CircularScore score={report.scores.overall} />
+              <div className="flex flex-col items-center gap-3">
+                <CircularScore score={report.scores.overall} />
+                <button
+                  onClick={mockupStatus === "idle" || mockupStatus === "error" ? generateMockup : undefined}
+                  disabled={mockupStatus === "loading"}
+                  className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition-all hover:bg-indigo-500 disabled:opacity-50"
+                  title="Generate a visual mockup of recommended improvements"
+                >
+                  {mockupStatus === "loading" ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                  ) : mockupStatus === "error" ? (
+                    <><Palette className="h-4 w-4" /> Retry Mockup</>
+                  ) : (
+                    <><Palette className="h-4 w-4" /> View Improved Mockup</>
+                  )}
+                </button>
+                {mockupStatus === "error" && (
+                  <span className="text-xs text-red-500 font-medium animate-pulse">Failed to generate preview. Try again.</span>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -198,6 +244,15 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
           )}
 
           <ScreenshotCard screenshot={report.screenshot} screenshots={report.screenshots} url={report.url} />
+
+          {mockupStatus === "success" && mockupData ? (
+            <MockupPreview 
+              originalScreenshot={report.screenshot} 
+              mockupData={mockupData.mockupData} 
+              fallbackUsed={mockupData.fallbackUsed} 
+              error={mockupData.error}
+            />
+          ) : null}
 
           <Card>
             <CardHeader className="pb-3">

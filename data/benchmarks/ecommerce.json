@@ -1,18 +1,5 @@
 [
   {
-    "name": "woocommerce",
-    "url": "https://www.woocommerce.com",
-    "overall": 86,
-    "mobile": 84,
-    "seo": 88,
-    "auditedDate": "2026-03-20",
-    "sourceType": "pre-audited",
-    "city": "San Francisco",
-    "state": "California",
-    "country": "United States",
-    "lastUpdated": "2026-03-25T05:00:51.251Z"
-  },
-  {
     "name": "shopify",
     "url": "https://www.shopify.com",
     "overall": 85,
@@ -20,24 +7,10 @@
     "seo": 100,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T05:01:11.641Z",
+    "lastUpdated": "2026-03-25T07:15:05.879Z",
     "city": "Ottawa",
     "state": "Ontario",
     "country": "Canada"
-  },
-  {
-    "name": "flipkart",
-    "url": "https://www.flipkart.com",
-    "overall": 85,
-    "mobile": 80,
-    "seo": 80,
-    "auditedDate": "2026-03-25",
-    "sourceType": "live",
-    "lastUpdated": "2026-03-25T05:01:32.624Z",
-    "city": "Bengaluru",
-    "district": "Bangalore Urban",
-    "state": "Karnataka",
-    "country": "India"
   },
   {
     "name": "myntra",
@@ -47,11 +20,24 @@
     "seo": 100,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T05:01:52.777Z",
+    "lastUpdated": "2026-03-25T07:15:26.100Z",
     "city": "Bengaluru",
     "district": "Bangalore Urban",
     "state": "Karnataka",
     "country": "India"
+  },
+  {
+    "name": "woocommerce",
+    "url": "https://www.woocommerce.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T07:15:46.213Z",
+    "city": "San Francisco",
+    "state": "California",
+    "country": "United States"
   },
   {
     "name": "nykaa",
@@ -65,7 +51,7 @@
     "district": "Mumbai City",
     "state": "Maharashtra",
     "country": "India",
-    "lastUpdated": "2026-03-25T05:00:51.251Z"
+    "lastUpdated": "2026-03-25T07:14:45.556Z"
   },
   {
     "name": "bigcommerce",
@@ -78,6 +64,6 @@
     "city": "Austin",
     "state": "Texas",
     "country": "United States",
-    "lastUpdated": "2026-03-25T05:00:51.251Z"
+    "lastUpdated": "2026-03-25T07:14:45.556Z"
   }
 ]

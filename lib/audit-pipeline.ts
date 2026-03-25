@@ -297,7 +297,8 @@ export async function runAuditPipeline(
     const htmlFallback = await runStageTrace(stageTrace, "http-html", async () =>
       await withTimeout(async () => await fetchHtmlFallback(url), HTML_FETCH_TIMEOUT_MS, "http-html")
     ).catch((error) => {
-      throw withTrace(error, stageTrace);
+      console.warn("[audit:html:fallback] Failed:", String(error));
+      return "";
     });
 
     desktopHtml = htmlFallback;
@@ -324,7 +325,8 @@ export async function runAuditPipeline(
     const htmlFallback = await runStageTrace(stageTrace, "http-html", async () =>
       await withTimeout(async () => await fetchHtmlFallback(url), HTML_FETCH_TIMEOUT_MS, "http-html")
     ).catch((error) => {
-      throw withTrace(error, stageTrace);
+      console.warn("[audit:html:fallback-final] Failed:", String(error));
+      return "";
     });
     desktopHtml = htmlFallback;
     mobileHtml = htmlFallback;

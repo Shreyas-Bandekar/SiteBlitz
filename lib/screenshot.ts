@@ -22,10 +22,15 @@ async function preparePage(page: import("puppeteer").Page, userAgent: string, na
 
 async function safeGoto(page: import("puppeteer").Page, url: string, navTimeoutMs: number, settleMs: number) {
   try {
-    await page.goto(url, { waitUntil: "networkidle0", timeout: navTimeoutMs });
+    // Use networkidle2 instead of networkidle0 so tracking pixels don't cause timeouts
+    await page.goto(url, { waitUntil: "networkidle2", timeout: navTimeoutMs });
   } catch {
     // Keep fallback bounded so fast mode does not exceed API budget.
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: navTimeoutMs + 3000 });
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 5000 });
+    } catch (err) {
+      console.warn("[screenshot:safeGoto:fallback]", String(err));
+    }
   }
   // Let client-side render, images, and fonts settle before screenshot
   await new Promise((r) => setTimeout(r, settleMs));
@@ -39,9 +44,14 @@ async function tryCapture(
 ): Promise<string | undefined> {
   try {
     await safeGoto(page, url, navTimeoutMs, settleMs);
-    const raw = ((await page.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
-    return `data:image/png;base64,${raw}`;
-  } catch {
+    // Request raw base64 string directly from Puppeteer to avoid Buffer casting errors
+    const raw = await page.screenshot({ type: "png", fullPage: false, encoding: "base64" });
+    if (typeof raw === "string") {
+      return `data:image/png;base64,${raw}`;
+    }
+    return undefined;
+  } catch (err) {
+    console.warn("[screenshot:tryCapture:error]", String(err));
     return undefined;
   }
 }
