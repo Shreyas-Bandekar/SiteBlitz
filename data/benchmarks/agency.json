@@ -7,24 +7,10 @@
     "seo": 94,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T01:47:14.836Z",
+    "lastUpdated": "2026-03-25T03:42:15.263Z",
     "city": "New York",
     "state": "New York",
     "country": "United States"
-  },
-  {
-    "name": "schbang",
-    "url": "https://www.schbang.com",
-    "overall": 85,
-    "mobile": 80,
-    "seo": 94,
-    "auditedDate": "2026-03-25",
-    "sourceType": "live",
-    "lastUpdated": "2026-03-25T01:47:35.111Z",
-    "city": "Mumbai",
-    "district": "Mumbai Suburban",
-    "state": "Maharashtra",
-    "country": "India"
   },
   {
     "name": "dentsu",
@@ -34,8 +20,21 @@
     "seo": 100,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T01:47:55.283Z",
+    "lastUpdated": "2026-03-25T03:42:35.359Z",
     "city": "Tokyo",
     "country": "Japan"
+  },
+  {
+    "name": "ogilvy",
+    "url": "https://www.ogilvy.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 94,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T01:47:14.836Z",
+    "city": "New York",
+    "state": "New York",
+    "country": "United States"
   }
 ]
