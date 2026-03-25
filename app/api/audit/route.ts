@@ -10,7 +10,7 @@ import { getLiveBenchmarks } from "../../../lib/live-benchmarks";
 import { detectLocationSignals } from "../../../lib/location-detection";
 import { calculateLiveROI, getFreeTrafficEstimate } from "../../../lib/free-roi";
 import { makeTrustMeta, calculateTrustBreakdown } from "../../../lib/trust";
-import type { StageTraceEntry, IndustryCategory, TrustMeta } from "../../../lib/audit-types";
+import type { StageTraceEntry, IndustryCategory, TrustMeta, BenchmarkSite } from "../../../lib/audit-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -62,7 +62,8 @@ export async function POST(req: Request) {
     const filteredBenchmarks = indiaOnlyMode
       ? benchmarks.filter((b) => normalizeCountry(b.country) === "india")
       : benchmarks;
-    const limitedBenchmarks = filteredBenchmarks.slice(0, 1);
+    const sanitizedBenchmarks = filterIrrelevantCompetitors(url, filteredBenchmarks);
+    const limitedBenchmarks = sanitizedBenchmarks.slice(0, 3);
 
     const competitors = limitedBenchmarks.map(b => ({
       url: b.url,
@@ -293,6 +294,51 @@ export async function POST(req: Request) {
 
 function normalizeCountry(country?: string): string {
   return String(country || "").trim().toLowerCase();
+}
+
+function hostFromUrl(input: string): string {
+  try {
+    return new URL(input).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function isGlobalPlatformHost(host: string): boolean {
+  const GLOBAL_PLATFORM_HOSTS = new Set([
+    "youtube.com",
+    "facebook.com",
+    "instagram.com",
+    "twitter.com",
+    "x.com",
+    "linkedin.com",
+    "wikipedia.org",
+    "pinterest.com",
+    "reddit.com",
+    "google.com",
+    "tiktok.com",
+  ]);
+  return GLOBAL_PLATFORM_HOSTS.has(host);
+}
+
+function filterIrrelevantCompetitors(
+  targetUrl: string,
+  candidates: BenchmarkSite[]
+): BenchmarkSite[] {
+  const targetHost = hostFromUrl(targetUrl);
+  const targetIsPlatform = isGlobalPlatformHost(targetHost);
+
+  const cleaned = candidates.filter((c) => {
+    const host = hostFromUrl(c.url);
+    if (!host) return false;
+    if (host === targetHost) return false;
+    if (!targetIsPlatform && isGlobalPlatformHost(host)) return false;
+    return true;
+  });
+
+  const preferred = cleaned.filter((c) => c.sourceType === "live");
+  const ranked = [...(preferred.length > 0 ? preferred : cleaned)].sort((a, b) => b.overall - a.overall);
+  return ranked;
 }
 
 function shouldForceIndiaOnly(targetLocation: { country?: string } | undefined, rawHtml: string, pageUrl: string): boolean {

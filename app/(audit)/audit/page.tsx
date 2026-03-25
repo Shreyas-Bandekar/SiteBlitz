@@ -245,11 +245,6 @@ export default function AuditPage() {
                   </div>
                 )}
 
-                <div className="flex justify-center md:justify-end mt-8">
-                  <Button variant="outline" className="gap-2 h-12 px-6 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:text-blue-500 bg-background transition-all">
-                    📄 Download Manual Report (Powered by Groq AI)
-                  </Button>
-                </div>
               </div>
             )}
 

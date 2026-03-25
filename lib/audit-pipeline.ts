@@ -139,11 +139,11 @@ export async function runAuditPipeline(
         withTimeout(async () => {
           pipeline.push("puppeteer-screenshot-fast");
           return await captureScreenshots(url, {
-            navTimeoutMs: 6000,
-            settleMs: 500,
+            navTimeoutMs: 9000,
+            settleMs: 800,
             includeMobile: false,
           });
-        }, Math.min(SCREENSHOT_TIMEOUT_MS, 12000), "screenshot")
+        }, Math.min(SCREENSHOT_TIMEOUT_MS, 14000), "screenshot")
       ),
     ]);
 

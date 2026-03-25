@@ -1,12 +1,13 @@
 "use client";
 
 import { ActionRoadmap } from "./ActionRoadmap";
+import { useState } from "react";
 import type { AuditReport } from "../lib/audit-types";
 import { LiveDataBadges, IndustryBadge, ROISourceBadge } from "./LiveDataBadges";
 import AuditCards from "./AuditCards";
 import CircularScore from "./CircularScore";
 import LetterGrade from "./LetterGrade";
-import PDFReport from "./PDFReport";
+import PDFReport, { type ReportSection } from "./PDFReport";
 import ScoreRadar from "./ScoreRadar";
 import ScreenshotCard from "./ScreenshotCard";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
@@ -15,7 +16,39 @@ import { Target, TrendingUp, AlertTriangle } from "lucide-react";
 import { ScoreTable } from "./ManualAuditPanel";
 import CompetitorLiveTable from "./CompetitorLiveTable";
 
+const MANUAL_REPORT_SECTION_OPTIONS: Array<{ id: ReportSection; label: string }> = [
+  { id: "friendlySummary", label: "Simple business summary" },
+  { id: "radar", label: "Radar score breakdown" },
+  { id: "diagnostics", label: "Core diagnostics" },
+  { id: "issues", label: "Key issues" },
+  { id: "roadmap", label: "Action roadmap" },
+  { id: "ai", label: "AI insights" },
+  { id: "trust", label: "Trust and data quality" },
+  { id: "roi", label: "ROI snapshot" },
+  { id: "manualAudit", label: "Manual audit table" },
+];
+
+const MANUAL_REPORT_DEFAULT_SELECTION: ReportSection[] = [
+  "friendlySummary",
+  "issues",
+  "roadmap",
+  "trust",
+  "roi",
+  "manualAudit",
+];
+
 export default function LiveAuditResults({ report, manualMode = false }: { report: AuditReport; manualMode?: boolean }) {
+  const [reportMode, setReportMode] = useState<"manual" | "automatic">("manual");
+  const [manualReportSections, setManualReportSections] = useState<ReportSection[]>(MANUAL_REPORT_DEFAULT_SELECTION);
+  const [reportUserName, setReportUserName] = useState("");
+  const [reportCompanyName, setReportCompanyName] = useState("");
+
+  const toggleReportSection = (section: ReportSection) => {
+    setManualReportSections((prev) =>
+      prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
+    );
+  };
+
   const sortedRecommendations = [...(report.recommendations || [])].sort((a, b) => {
     const rank = { high: 3, medium: 2, low: 1 };
     return rank[b.priority] - rank[a.priority];
@@ -54,32 +87,6 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 shrink-0 flex-wrap justify-center">
               <CircularScore score={report.scores.overall} />
-              <PDFReport
-                payload={{
-                  url: report.url,
-                  scores: report.scores,
-                  issues: report.issues,
-                  recommendations: report.recommendations,
-                  summary: report.summary || report.aiInsights?.issues?.[0]?.fix || "",
-                  aiInsights: report.aiInsights,
-                  detectedIndustry: report.detectedIndustry,
-                  competitors: report.competitors?.length
-                    ? { topCompetitors: report.competitors.map((c) => ({ name: c.url, overall: c.score })) }
-                    : undefined,
-                  roi: report.roi || undefined,
-                  trendsSummary: report.trendsSummary,
-                  pipeline: report.pipeline,
-                  overallTrustScore: report.trustData?.trustScore ?? report.overallTrustScore,
-                  trustBreakdown: report.trustBreakdown,
-                  roiTrustMeta: report.trustByField?.roi ?? null,
-                  manualRules: report.manualRulesIssues?.length ? {
-                    uxScore: report.uxScore,
-                    leadScore: report.leadGenAnalysis?.score,
-                    issues: report.manualRulesIssues,
-                    roiImpact: report.leadGenAnalysis?.roiImpact,
-                  } : undefined,
-                }}
-              />
             </div>
           </CardContent>
         </Card>
@@ -105,6 +112,7 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
                 <Badge variant="warning">{counts.medium} Med</Badge>
                 <Badge variant="success">{counts.low} Low</Badge>
               </div>
+
             </div>
             <AuditCards scores={report.scores} industryAverageOverall={competitorAvg ?? undefined} />
           </div>
@@ -217,6 +225,155 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
                 <CompetitorLiveTable competitors={report.competitors} />
               ) : (
                 <p className="text-sm text-foreground/60">No competitor benchmarks were available for this run.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Report Generation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">User Name</label>
+                  <input
+                    value={reportUserName}
+                    onChange={(e) => setReportUserName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company Name</label>
+                  <input
+                    value={reportCompanyName}
+                    onChange={(e) => setReportCompanyName(e.target.value)}
+                    placeholder="Enter company name"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReportMode("manual")}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    reportMode === "manual"
+                      ? "bg-indigo-500 text-white"
+                      : "bg-secondary text-foreground hover:bg-secondary/80"
+                  }`}
+                >
+                  Manual Report Generation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportMode("automatic")}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    reportMode === "automatic"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-secondary text-foreground hover:bg-secondary/80"
+                  }`}
+                >
+                  Automatic Report Generation
+                </button>
+              </div>
+
+              {reportMode === "manual" ? (
+                <div className="space-y-3 rounded-xl border border-border bg-secondary/20 p-4">
+                  <p className="text-sm text-foreground/80">Select exactly what you want to include in the report.</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {MANUAL_REPORT_SECTION_OPTIONS.map((section) => (
+                      <label key={section.id} className="flex items-center gap-2 text-xs text-foreground/90">
+                        <input
+                          type="checkbox"
+                          checked={manualReportSections.includes(section.id)}
+                          onChange={() => toggleReportSection(section.id)}
+                          className="h-4 w-4 accent-indigo-500"
+                        />
+                        <span>{section.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div>
+                    <PDFReport
+                      mode="manual"
+                      selectedSections={manualReportSections}
+                      buttonLabel="Generate Manual Report"
+                      className="rounded-xl border border-indigo-500/50 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-500/20 disabled:pointer-events-none disabled:opacity-50"
+                      payload={{
+                        url: report.url,
+                        scores: report.scores,
+                        issues: report.issues,
+                        recommendations: report.recommendations,
+                        summary: report.summary || report.aiInsights?.issues?.[0]?.fix || "",
+                        aiInsights: report.aiInsights,
+                        detectedIndustry: report.detectedIndustry,
+                        competitors: report.competitors?.length
+                          ? { topCompetitors: report.competitors.map((c) => ({ name: c.url, overall: c.score })) }
+                          : undefined,
+                        roi: report.roi || undefined,
+                        screenshot: report.screenshot,
+                        screenshots: report.screenshots,
+                        trendsSummary: report.trendsSummary,
+                        pipeline: report.pipeline,
+                        overallTrustScore: report.trustData?.trustScore ?? report.overallTrustScore,
+                        trustBreakdown: report.trustBreakdown,
+                        roiTrustMeta: report.trustByField?.roi ?? null,
+                        manualRules: report.manualRulesIssues?.length ? {
+                          uxScore: report.uxScore,
+                          leadScore: report.leadGenAnalysis?.score,
+                          issues: report.manualRulesIssues,
+                          roiImpact: report.leadGenAnalysis?.roiImpact,
+                        } : undefined,
+                        userName: reportUserName.trim() || undefined,
+                        companyName: reportCompanyName.trim() || undefined,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-border bg-emerald-500/5 p-4">
+                  <p className="text-sm text-foreground/80">
+                    This mode creates a plain-language report for non-technical users with simple explanation, top issues, fix plan, trust, and ROI.
+                  </p>
+                  <div>
+                    <PDFReport
+                      mode="automatic"
+                      buttonLabel="Generate Automatic Report"
+                      className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:pointer-events-none disabled:opacity-50"
+                      payload={{
+                        url: report.url,
+                        scores: report.scores,
+                        issues: report.issues,
+                        recommendations: report.recommendations,
+                        summary: report.summary || report.aiInsights?.issues?.[0]?.fix || "",
+                        aiInsights: report.aiInsights,
+                        detectedIndustry: report.detectedIndustry,
+                        competitors: report.competitors?.length
+                          ? { topCompetitors: report.competitors.map((c) => ({ name: c.url, overall: c.score })) }
+                          : undefined,
+                        roi: report.roi || undefined,
+                        screenshot: report.screenshot,
+                        screenshots: report.screenshots,
+                        trendsSummary: report.trendsSummary,
+                        pipeline: report.pipeline,
+                        overallTrustScore: report.trustData?.trustScore ?? report.overallTrustScore,
+                        trustBreakdown: report.trustBreakdown,
+                        roiTrustMeta: report.trustByField?.roi ?? null,
+                        manualRules: report.manualRulesIssues?.length ? {
+                          uxScore: report.uxScore,
+                          leadScore: report.leadGenAnalysis?.score,
+                          issues: report.manualRulesIssues,
+                          roiImpact: report.leadGenAnalysis?.roiImpact,
+                        } : undefined,
+                        userName: reportUserName.trim() || undefined,
+                        companyName: reportCompanyName.trim() || undefined,
+                      }}
+                    />
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

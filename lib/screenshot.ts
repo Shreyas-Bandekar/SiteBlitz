@@ -24,10 +24,26 @@ async function safeGoto(page: import("puppeteer").Page, url: string, navTimeoutM
   try {
     await page.goto(url, { waitUntil: "networkidle0", timeout: navTimeoutMs });
   } catch {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: navTimeoutMs + 15000 });
+    // Keep fallback bounded so fast mode does not exceed API budget.
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: navTimeoutMs + 3000 });
   }
   // Let client-side render, images, and fonts settle before screenshot
   await new Promise((r) => setTimeout(r, settleMs));
+}
+
+async function tryCapture(
+  page: import("puppeteer").Page,
+  url: string,
+  navTimeoutMs: number,
+  settleMs: number
+): Promise<string | undefined> {
+  try {
+    await safeGoto(page, url, navTimeoutMs, settleMs);
+    const raw = ((await page.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
+    return `data:image/png;base64,${raw}`;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function captureScreenshots(url: string, options: ScreenshotOptions = {}) {
@@ -57,11 +73,13 @@ export async function captureScreenshots(url: string, options: ScreenshotOptions
     const desktopPage = await browser.newPage();
     await desktopPage.setViewport({ width: 1366, height: 900 });
     await preparePage(desktopPage, DESKTOP_UA, navTimeoutMs);
-    try {
-      await safeGoto(desktopPage, url, navTimeoutMs, settleMs);
-      const raw = ((await desktopPage.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
-      desktop = `data:image/png;base64,${raw}`;
-    } catch (error) {
+    desktop = await tryCapture(desktopPage, url, navTimeoutMs, settleMs);
+    if (!desktop) {
+      // One relaxed retry for JS-heavy sites that miss the first short window.
+      desktop = await tryCapture(desktopPage, url, Math.max(navTimeoutMs, 10000), Math.max(settleMs, 800));
+    }
+    if (!desktop) {
+      const error = new Error("desktop screenshot retry exhausted");
       console.log("[screenshot:desktop:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
     }
 
@@ -69,11 +87,12 @@ export async function captureScreenshots(url: string, options: ScreenshotOptions
       const mobilePage = await browser.newPage();
       await mobilePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
       await preparePage(mobilePage, MOBILE_UA, navTimeoutMs);
-      try {
-        await safeGoto(mobilePage, url, navTimeoutMs, settleMs);
-        const raw = ((await mobilePage.screenshot({ type: "png", fullPage: false })) as Buffer).toString("base64");
-        mobile = `data:image/png;base64,${raw}`;
-      } catch (error) {
+      mobile = await tryCapture(mobilePage, url, navTimeoutMs, settleMs);
+      if (!mobile) {
+        mobile = await tryCapture(mobilePage, url, Math.max(navTimeoutMs, 10000), Math.max(settleMs, 800));
+      }
+      if (!mobile) {
+        const error = new Error("mobile screenshot retry exhausted");
         console.log("[screenshot:mobile:failed]", JSON.stringify({ url, error: error instanceof Error ? error.message : "unknown" }));
       }
     }
