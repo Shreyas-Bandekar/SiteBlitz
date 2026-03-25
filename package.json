@@ -1,0 +1,51 @@
+{
+  "name": "ai-website-auditor",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc --noEmit",
+    "test": "tsx --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.52",
+    "@axe-core/playwright": "latest",
+    "@google/generative-ai": "^0.24.1",
+    "@types/cheerio": "^0.22.35",
+    "@types/seedrandom": "^3.0.8",
+    "ai": "^6.0.134",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "chrome-launcher": "latest",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
+    "html-to-pdfmake": "latest",
+    "jose": "^6.2.2",
+    "jspdf": "^4.2.1",
+    "lighthouse": "latest",
+    "lucide-react": "^0.577.0",
+    "next": "latest",
+    "pdfmake": "latest",
+    "playwright": "latest",
+    "postgres": "^3.4.8",
+    "puppeteer": "^24.40.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "recharts": "^3.8.0",
+    "seedrandom": "^3.0.5",
+    "tailwind-merge": "^3.5.0",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "postcss": "latest",
+    "tailwindcss": "^3.4.17",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

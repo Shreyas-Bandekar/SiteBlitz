@@ -1,0 +1,77 @@
+{
+  "url": "https://sample-business-site.demo",
+  "scores": {
+    "uiux": 62,
+    "seo": 58,
+    "mobile": 54,
+    "performance": 49,
+    "accessibility": 57,
+    "leadConversion": 44,
+    "overall": 55
+  },
+  "issues": [
+    {
+      "category": "performance",
+      "title": "Low Lighthouse performance score",
+      "detail": "Large hero assets and blocking JS delay first render.",
+      "severity": "high"
+    },
+    {
+      "category": "mobile",
+      "title": "Low mobile tap target coverage",
+      "detail": "Interactive elements are sparse on mobile above the fold.",
+      "severity": "medium"
+    },
+    {
+      "category": "leadConversion",
+      "title": "No lead form detected",
+      "detail": "No clear lead capture form present on primary landing page.",
+      "severity": "high"
+    },
+    {
+      "category": "seo",
+      "title": "Missing meta description",
+      "detail": "Search snippets are not optimized for click-through.",
+      "severity": "medium"
+    },
+    {
+      "category": "uiux",
+      "title": "Heading hierarchy issue",
+      "detail": "Multiple H1s reduce content clarity for users and crawlers.",
+      "severity": "medium"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "high",
+      "category": "performance",
+      "action": "Compress hero media and defer non-critical scripts",
+      "rationale": "Fast load speed improves engagement and ad conversion efficiency."
+    },
+    {
+      "priority": "high",
+      "category": "leadConversion",
+      "action": "Add a short above-the-fold lead form with one primary CTA",
+      "rationale": "Reduces friction and captures intent before drop-off."
+    },
+    {
+      "priority": "medium",
+      "category": "mobile",
+      "action": "Increase mobile CTA button prominence and spacing",
+      "rationale": "Improves tap confidence and mobile funnel progression."
+    },
+    {
+      "priority": "medium",
+      "category": "seo",
+      "action": "Add unique meta descriptions on key pages",
+      "rationale": "Improves SERP CTR and qualified traffic volume."
+    },
+    {
+      "priority": "low",
+      "category": "uiux",
+      "action": "Normalize H1/H2 hierarchy for clarity",
+      "rationale": "Strengthens readability and SEO signal structure."
+    }
+  ],
+  "summary": "Sample fallback report loaded. This demonstrates scoring, issues, and prioritized action planning when live internet conditions are unstable during judging."
+}
