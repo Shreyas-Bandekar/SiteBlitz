@@ -1,0 +1,22 @@
+[
+  {
+    "name": "shopify",
+    "url": "https://www.shopify.com",
+    "overall": 85,
+    "mobile": 90,
+    "seo": 96,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T02:34:55.748Z"
+  },
+  {
+    "name": "woocommerce",
+    "url": "https://www.woocommerce.com",
+    "overall": 85,
+    "mobile": 90,
+    "seo": 96,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T02:35:39.664Z"
+  }
+]

@@ -106,6 +106,54 @@ function extractBrandHint(title: string): string | null {
   return null;
 }
 
+function looksLikeServiceCompany(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  return /web|mobile app|development|software|technology|tech|agency|services|company|consulting/.test(t);
+}
+
+function hasStrongEcommerceSignals(html: string): boolean {
+  const t = String(html || "").toLowerCase();
+  const hits = [
+    /add to cart/.test(t),
+    /checkout/.test(t),
+    /buy now/.test(t),
+    /product\b/.test(t),
+    /shipping/.test(t),
+    /cart\b/.test(t),
+  ].filter(Boolean).length;
+  return hits >= 2;
+}
+
+function extractLocationHint(text: string): string | null {
+  const m = String(text || "").match(/\bin\s+([a-z][a-z\s]{1,30})$/i);
+  if (!m?.[1]) return null;
+  return m[1]
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function inferServiceOffering(text: string): string {
+  const t = String(text || "").toLowerCase();
+  if (/web\s*&\s*mobile app/.test(t) || /web\s+and\s+mobile app/.test(t)) {
+    return "web and mobile app development";
+  }
+  if (/mobile app/.test(t) && /development/.test(t)) {
+    return "mobile app development";
+  }
+  if (/web/.test(t) && /development/.test(t)) {
+    return "web development";
+  }
+  if (/software/.test(t) && /development/.test(t)) {
+    return "software development";
+  }
+  if (/agency/.test(t)) {
+    return "digital services";
+  }
+  return "digital product development";
+}
+
 type ContentIntentTier = "commercial" | "education_community" | "neutral";
 
 function scoreEducationSignals(html: string): number {
@@ -218,6 +266,64 @@ function scoreFromSignals(base: number, bonuses: number[], penalties: number[]) 
 
 function count(html: string, regex: RegExp) {
   return (html.match(regex) || []).length;
+}
+
+function tokenSet(input: string): Set<string> {
+  return new Set(
+    String(input || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .map((w) => w.trim())
+      .filter((w) => w.length >= 4)
+  );
+}
+
+function overlapRatio(a: string, b: string): number {
+  const A = tokenSet(a);
+  const B = tokenSet(b);
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  for (const x of A) if (B.has(x)) inter++;
+  return inter / Math.max(A.size, 1);
+}
+
+function polishKeepingMeaning(current: string): string {
+  return String(current || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+\|\s+/g, " | ")
+    .replace(/\s+[-–]\s+/g, " - ")
+    .trim();
+}
+
+function conservativeSuggestion(input: {
+  kind: "title" | "metaDescription" | "h1";
+  current: string;
+  proposed: string;
+  fieldQuality: number;
+  serviceCompanyCue: boolean;
+  locationHint: string | null;
+  brand: string | null;
+  offering: string;
+}): string {
+  const { kind, current, proposed, fieldQuality, serviceCompanyCue, locationHint, brand, offering } = input;
+  if (!current || current === "Missing") return proposed;
+
+  const polishedCurrent = polishKeepingMeaning(current);
+  const keepCurrent =
+    (kind === "title" || kind === "h1") &&
+    fieldQuality >= 72 &&
+    overlapRatio(polishedCurrent, proposed) < 0.25;
+  if (keepCurrent) return polishedCurrent;
+
+  if (kind === "metaDescription" && serviceCompanyCue) {
+    // Meta can be expanded, but should stay tied to brand/service/location context.
+    const base = brand ? `${brand} offers ${offering}` : `We offer ${offering}`;
+    const loc = locationHint ? ` in ${locationHint}` : "";
+    return `${base}${loc} for startups and growing businesses. Talk to our team for a delivery plan.`;
+  }
+
+  return proposed;
 }
 
 export function analyzeWebsite(htmlRaw: string, pagespeedRaw: any): AuditResult {
@@ -348,8 +454,16 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
 
   const { tier, eduScore, commercialScore } = resolveContentIntentTier(html, industry);
   const intentClarity = intentClarityForConfidence(eduScore, commercialScore);
-  const useIndustryInCopy = industryConfidence >= 72 && industry !== "other" && tier === "commercial";
+  const serviceCompanyCue = looksLikeServiceCompany(`${currentTitle} ${currentH1}`);
+  const strongEcommerceSignals = hasStrongEcommerceSignals(html);
+  const industryMismatchRisk = industry === "ecommerce" && serviceCompanyCue && !strongEcommerceSignals;
+  const useIndustryInCopy =
+    industryConfidence >= 72 &&
+    industry !== "other" &&
+    tier === "commercial" &&
+    !industryMismatchRisk;
   const brand = extractBrandHint(currentTitle) || extractBrandHint(currentH1);
+  const locationHint = extractLocationHint(currentTitle) || extractLocationHint(currentH1);
 
   const guidelinesCommercial = useIndustryInCopy
     ? [`Align headline with ${industry} buyer intent.`, "Use specific outcomes and credibility cues.", "Keep metadata human-readable and concise."]
@@ -414,13 +528,16 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
     };
   } else if (tier === "commercial") {
     if (useIndustryInCopy) {
+      const locationSuffix = locationHint ? ` in ${locationHint}` : "";
       titlePack = {
-        suggested: `Top ${industry} website — improve leads, speed, and trust`,
+        suggested: brand
+          ? `${brand} | Improve speed, trust, and lead quality${locationSuffix}`
+          : `Improve speed, trust, and lead quality for your ${industry} site`,
         reason: `Commercial signals (score ${commercialScore}) and confident industry match (${industry}) support outcome-oriented copy.`,
         alignment: 14,
       };
       metaPack = {
-        suggested: `See how your ${industry} site performs on speed, SEO, and conversion — with clear, actionable next steps.`,
+        suggested: `See how your ${industry} site performs on speed, SEO, and lead conversion with clear, actionable fixes tied to detected issues.`,
         reason: "Description matches detected commercial intent and industry category.",
         alignment: 14,
       };
@@ -430,22 +547,42 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
         alignment: 14,
       };
     } else {
+      const offering = inferServiceOffering(`${currentTitle} ${currentH1}`);
       titlePack = {
-        suggested: "What you offer, who it helps, and the clearest next step — in one line",
-        reason: `Commercial cues present (score ${commercialScore}) but industry fit is uncertain — copy stays specific without naming the wrong market.`,
+        suggested: brand
+          ? `${brand} | Web & Mobile App Development${locationHint ? ` in ${locationHint}` : ""}`
+          : "What you offer, who it helps, and the clearest next step — in one line",
+        reason: industryMismatchRisk
+          ? "Detected service-company cues conflict with ecommerce phrasing, so copy preserves current business context."
+          : `Commercial cues present (score ${commercialScore}) but industry fit is uncertain — copy stays specific without naming the wrong market.`,
         alignment: 10,
       };
-      metaPack = {
-        suggested:
-          "Explain your offer, who it’s for, and what visitors should do next — two short sentences with concrete value.",
-        reason: "Safe commercial-leaning meta without assuming a narrow industry label.",
-        alignment: 10,
-      };
-      h1Pack = {
-        suggested: "A clear headline: your main promise and who it’s for",
-        reason: "H1 guidance stays conversion-aware but avoids incorrect vertical language.",
-        alignment: 10,
-      };
+      if (industryMismatchRisk || serviceCompanyCue) {
+        metaPack = {
+          suggested: brand
+            ? `${brand} offers ${offering}${locationHint ? ` in ${locationHint}` : ""} for startups and growing businesses. Talk to our team today.`
+            : `Get ${offering}${locationHint ? ` in ${locationHint}` : ""} with clear delivery plans and measurable outcomes.`,
+          reason: "Service-company cues detected, so meta copy stays concrete and aligned with existing business positioning.",
+          alignment: 12,
+        };
+        h1Pack = {
+          suggested: `${brand ? `${brand} — ` : ""}${offering.charAt(0).toUpperCase() + offering.slice(1)}${locationHint ? ` in ${locationHint}` : ""}`,
+          reason: "H1 preserves the current service offering and location context instead of generic placeholder phrasing.",
+          alignment: 12,
+        };
+      } else {
+        metaPack = {
+          suggested:
+            "Explain your offer, who it’s for, and what visitors should do next — two short sentences with concrete value.",
+          reason: "Safe commercial-leaning meta without assuming a narrow industry label.",
+          alignment: 10,
+        };
+        h1Pack = {
+          suggested: "A clear headline: your main promise and who it’s for",
+          reason: "H1 guidance stays conversion-aware but avoids incorrect vertical language.",
+          alignment: 10,
+        };
+      }
     }
   } else {
     titlePack = {
@@ -471,6 +608,38 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
   const gTitle = fieldEvidenceQuality(currentTitle, "title");
   const gMeta = fieldEvidenceQuality(currentMeta, "metaDescription");
   const gH1 = fieldEvidenceQuality(currentH1, "h1");
+  const offering = inferServiceOffering(`${currentTitle} ${currentH1}`);
+
+  const finalTitle = conservativeSuggestion({
+    kind: "title",
+    current: currentTitle,
+    proposed: titlePack.suggested,
+    fieldQuality: gTitle.quality,
+    serviceCompanyCue,
+    locationHint,
+    brand,
+    offering,
+  });
+  const finalMeta = conservativeSuggestion({
+    kind: "metaDescription",
+    current: currentMeta,
+    proposed: metaPack.suggested,
+    fieldQuality: gMeta.quality,
+    serviceCompanyCue,
+    locationHint,
+    brand,
+    offering,
+  });
+  const finalH1 = conservativeSuggestion({
+    kind: "h1",
+    current: currentH1,
+    proposed: h1Pack.suggested,
+    fieldQuality: gH1.quality,
+    serviceCompanyCue,
+    locationHint,
+    brand,
+    offering,
+  });
 
   const confTitle = computeContentSuggestionConfidence({
     industryConfidence,
@@ -509,7 +678,7 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
     {
       type: "title",
       current: currentTitle,
-      suggested: titlePack.suggested,
+      suggested: finalTitle,
       reason: titlePack.reason,
       confidence: confTitle,
       guidelineBullets: bullets,
@@ -517,7 +686,7 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
     {
       type: "metaDescription",
       current: currentMeta,
-      suggested: metaPack.suggested,
+      suggested: finalMeta,
       reason: metaPack.reason,
       confidence: confMeta,
       guidelineBullets: bullets,
@@ -525,7 +694,7 @@ export function generateContentSuggestions(htmlRaw: string, industry: string, in
     {
       type: "h1",
       current: currentH1,
-      suggested: h1Pack.suggested,
+      suggested: finalH1,
       reason: h1Pack.reason,
       confidence: confH1,
       guidelineBullets: bullets,

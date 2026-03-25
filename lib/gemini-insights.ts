@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { GeminiInsights, TrustData } from "./audit-types";
 
 type GeminiAuditData = {
@@ -7,8 +6,90 @@ type GeminiAuditData = {
   [key: string]: unknown;
 };
 
-function resolveGeminiApiKey() {
-  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+type GroqChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+};
+
+const STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "that", "this", "your", "you", "are", "was", "were", "have", "has", "had",
+  "into", "onto", "about", "after", "before", "across", "only", "must", "should", "could", "would", "more", "less",
+  "than", "over", "under", "into", "when", "then", "also", "very", "some", "many", "into", "site", "website",
+]);
+
+function resolveGroqApiKey() {
+  return process.env.GROQ_API_KEY || "";
+}
+
+function resolveGroqModel() {
+  return process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+}
+
+function resolveTimeoutMs() {
+  return Number(process.env.GROQ_TIMEOUT_MS || process.env.GEMINI_TIMEOUT_MS || 12000);
+}
+
+function tryParseJson<T>(raw: string): T | null {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(raw.slice(start, end + 1)) as T;
+  } catch {
+    return null;
+  }
+}
+
+function tokenize(text: string): string[] {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 4 && !STOP_WORDS.has(t));
+}
+
+function isGenericWin(win: string): boolean {
+  const w = win.toLowerCase();
+  return (
+    /improve (seo|performance|ux|ui)\b/.test(w) ||
+    /optimi[sz]e (your |the )?website\b/.test(w) ||
+    /enhance user experience\b/.test(w) ||
+    /add more content\b/.test(w) ||
+    /improve conversion rates?\b/.test(w)
+  );
+}
+
+function dedupeWins(wins: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const w of wins) {
+    const normalized = w.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(w.trim());
+  }
+  return out;
+}
+
+function qualityGateWins(
+  modelWins: string[],
+  fallbackWins: string[],
+  contextKeywords: Set<string>
+): string[] {
+  const filtered = dedupeWins(modelWins)
+    .filter((w) => w.length >= 20)
+    .filter((w) => !isGenericWin(w))
+    .filter((w) => tokenize(w).some((t) => contextKeywords.has(t)));
+
+  if (filtered.length >= 3) return filtered.slice(0, 3);
+
+  // Mix high-confidence model wins with deterministic fallback actions.
+  const mixed = dedupeWins([...filtered, ...fallbackWins]);
+  return mixed.slice(0, 3);
 }
 
 export function extractQuickWins(text: string): string[] {
@@ -46,17 +127,21 @@ export async function getGeminiInsights(auditData: GeminiAuditData, url: string,
       .filter((v): v is string => Boolean(v))
       .slice(0, 3);
   const safeFallbackWins = fallbackQuickWins.length ? fallbackQuickWins : ["Improve above-fold CTA clarity", "Reduce friction on lead capture", "Strengthen trust signals near CTA"];
-  const fallbackSummary = `Trust ${trust.trustScore}/100. Manual rules detected ${(auditData?.issues?.length ?? 0)} fixes.`;
-  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS || 12000);
-  const apiKey = resolveGeminiApiKey();
+  const topIssue = (auditData.issues || []).map((x) => String(x || "").trim()).find(Boolean);
+  const fallbackSummary = topIssue
+    ? `Trust ${trust.trustScore}/100. Top deterministic issue: ${topIssue.slice(0, 120)}.`
+    : `Trust ${trust.trustScore}/100. Manual rules detected ${(auditData?.issues?.length ?? 0)} fixes.`;
+  const timeoutMs = resolveTimeoutMs();
+  const apiKey = resolveGroqApiKey();
+  const model = resolveGroqModel();
   const evidenceSnippet = ((auditData.leadGenAnalysis as { contactFormEvidence?: string[] } | undefined)?.contactFormEvidence ?? []).slice(0, 3);
   if (!apiKey) {
-    console.warn("[gemini:report:failed]", JSON.stringify({ reason: "missing_key", url }));
+    console.warn("[ai:report:failed]", JSON.stringify({ reason: "missing_key", provider: "groq", url }));
     return {
       summary: fallbackSummary,
       quickWins: safeFallbackWins,
       trustScore: trust.trustScore,
-      fallback: "Manual Mode Active (GEMINI_API_KEY missing)",
+      fallback: "Manual Mode Active (GROQ_API_KEY missing)",
       fallbackReason: "missing_key",
       sourceMode: "fallback",
       evidenceSnippet,
@@ -64,35 +149,86 @@ export async function getGeminiInsights(auditData: GeminiAuditData, url: string,
     };
   }
 
-  // BULLETPROOF Gemini
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }) // Faster
-  
-  const prompt = `Deterministic audit findings: ${JSON.stringify(auditData)}
-Trust Score: ${trust.trustScore}/100.
+  const contextKeywords = new Set<string>([
+    ...tokenize((auditData.issues || []).join(" ")),
+    ...tokenize((auditData.recommendations || []).map((r) => r?.action || "").join(" ")),
+  ]);
 
-Generate PROFESSIONAL insights:
--  Executive Summary (1 sentence, evidence-based)
--  3 Quick Fixes (actionable, site-specific)
--  Expected ROI lift
--  Tone: CEO consultant
-- Never invent missing issues not present in deterministic findings.
-- If contact form exists with confidence >= 60, do NOT suggest adding one.
+  const evidence = {
+    trustScore: trust.trustScore,
+    issues: (auditData.issues || []).map((x) => String(x || "").trim()).filter(Boolean).slice(0, 12),
+    recommendations: (auditData.recommendations || [])
+      .map((r) => String(r?.action || "").trim())
+      .filter(Boolean)
+      .slice(0, 12),
+    leadGen: auditData.leadGenAnalysis || null,
+    scores: auditData.pipelineScores || null,
+  };
 
-KEEP SHORT. No fluff.`
+  const prompt = [
+    "You are a strict deterministic CRO assistant.",
+    "Return JSON only with exact keys: summary (string), quickWins (string[3]).",
+    "Hard rules:",
+    "- Use ONLY the evidence provided below. Do not invent issues, numbers, tools, or claims.",
+    "- Every quick win must map to at least one evidence issue/recommendation.",
+    "- Write concrete actions, not generic advice.",
+    "- If contact form exists with confidence >= 60, do NOT suggest adding a contact form.",
+    "- summary max 220 chars.",
+    "- quickWins must be 3 concise implementation actions.",
+    "Evidence JSON:",
+    JSON.stringify(evidence),
+  ].join("\n");
 
   try {
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout:${timeoutMs}`)), timeoutMs)),
-    ]);
-    const insights = result.response.text().trim()
-    if (!insights) throw new Error("invalid_response:empty_text");
-    console.log("[gemini:report:ok]", JSON.stringify({ url, chars: insights.length, trust: trust.trustScore }));
-    
-    const rawSummary = insights.slice(0, 220);
-    const parsedWins = extractQuickWins(insights);
-    const reconciled = reconcileWithLeadEvidence(parsedWins, rawSummary, auditData);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: 320,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: "Return only compact JSON. No markdown, no prose outside JSON.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      }),
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`http_${response.status}:${errText.slice(0, 200)}`);
+    }
+
+    const payload = (await response.json()) as GroqChatResponse;
+    const content = payload.choices?.[0]?.message?.content?.trim() || "";
+    if (!content) throw new Error("invalid_response:empty_text");
+
+    const parsed =
+      tryParseJson<{ summary?: string; quickWins?: string[] }>(content) ||
+      tryParseJson<{ summary?: string; quickWins?: string[] }>(`{${content}}`);
+
+    const rawSummary = (parsed?.summary || content).slice(0, 220);
+    const parsedWins = Array.isArray(parsed?.quickWins) ? parsed.quickWins.slice(0, 6) : extractQuickWins(content);
+    const gatedWins = qualityGateWins(parsedWins, safeFallbackWins, contextKeywords);
+    const reconciled = reconcileWithLeadEvidence(gatedWins, rawSummary, auditData);
+    console.log("[ai:report:ok]", JSON.stringify({ provider: "groq", url, chars: content.length, trust: trust.trustScore }));
+
     return {
       summary: reconciled.summary || fallbackSummary,
       quickWins: reconciled.wins.length ? reconciled.wins : safeFallbackWins,
@@ -100,11 +236,11 @@ KEEP SHORT. No fluff.`
       sourceMode: "real",
       evidenceSnippet,
       working: true
-    }
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     const reason =
-      message.startsWith("timeout:")
+      /abort|timeout/i.test(message)
         ? "timeout"
         : /quota|429|rate/i.test(message)
           ? "quota"
@@ -113,8 +249,7 @@ KEEP SHORT. No fluff.`
             : /invalid_response/i.test(message)
               ? "invalid_response"
               : "runtime_error";
-    console.warn("[gemini:report:failed]", JSON.stringify({ reason, url, error: message }));
-    // FAILSAFE MANUAL INSIGHTS
+    console.warn("[ai:report:failed]", JSON.stringify({ reason, provider: "groq", url, error: message }));
     return {
       summary: fallbackSummary,
       quickWins: safeFallbackWins,
@@ -124,6 +259,6 @@ KEEP SHORT. No fluff.`
       sourceMode: "fallback",
       evidenceSnippet,
       working: true
-    }
+    };
   }
 }

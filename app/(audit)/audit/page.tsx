@@ -152,7 +152,7 @@ export default function AuditPage() {
               <div className="mb-6 flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-5 py-4">
                 <span className="text-lg">🔬</span>
                 <div>
-                  <p className="font-bold text-indigo-300">25 Manual Rules + Gemini Backup</p>
+                  <p className="font-bold text-indigo-300">25 Manual Rules + AI Backup</p>
                   <p className="text-sm text-indigo-200/70">Manual rules caught {report.manualRulesIssues?.length ?? 0} UX issues Lighthouse missed.</p>
                 </div>
               </div>
@@ -162,7 +162,7 @@ export default function AuditPage() {
             {report.deterministic && (
               <div className="mt-8 rounded-xl border border-border bg-card p-6">
                 <h3 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2">
-                  <span className="text-blue-500">✨</span> Gemini Pro Analysis
+                  <span className="text-blue-500">✨</span> AI Analysis
                 </h3>
                   
                 {report.leadGen?.status === "✅ LEAD GEN HEALTHY" ? (
@@ -207,7 +207,7 @@ export default function AuditPage() {
                   <div className="mt-8 p-6 bg-secondary/30 rounded-xl border border-border relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 rounded-l-xl"></div>
                     <div className="flex items-center gap-3 mb-4">
-                      <h3 className="text-lg font-bold">Gemini Pro Analysis</h3>
+                      <h3 className="text-lg font-bold">AI Analysis</h3>
                       <Badge
                         variant="outline"
                         className={
@@ -216,7 +216,7 @@ export default function AuditPage() {
                             : "border-amber-500/30 text-amber-500 bg-amber-500/10"
                         }
                       >
-                        {report.geminiInsights?.sourceMode === "real" ? "Gemini Real" : "Gemini Fallback"}
+                        {report.geminiInsights?.sourceMode === "real" ? "Groq Real" : "Groq Fallback"}
                       </Badge>
                     </div>
                     <div className="text-base text-foreground/90 font-medium mb-5">
@@ -241,7 +241,7 @@ export default function AuditPage() {
 
                 <div className="flex justify-center md:justify-end mt-8">
                   <Button variant="outline" className="gap-2 h-12 px-6 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:text-blue-500 bg-background transition-all">
-                    📄 Download Manual Report (Powered by Gemini AI)
+                    📄 Download Manual Report (Powered by AI)
                   </Button>
                 </div>
               </div>
