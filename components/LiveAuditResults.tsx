@@ -16,6 +16,13 @@ import { Target, TrendingUp, AlertTriangle } from "lucide-react";
 import { ScoreTable } from "./ManualAuditPanel";
 import CompetitorLiveTable from "./CompetitorLiveTable";
 
+function contentFixLabel(kind: string): string {
+  if (kind === "contentClarity") return "Content Clarity";
+  if (kind === "conversionPath") return "Conversion Path";
+  if (kind === "trustAndProof") return "Trust and Proof";
+  return "Insight";
+}
+
 const MANUAL_REPORT_SECTION_OPTIONS: Array<{ id: ReportSection; label: string }> = [
   { id: "friendlySummary", label: "Simple business summary" },
   { id: "radar", label: "Radar score breakdown" },
@@ -460,7 +467,7 @@ export default function LiveAuditResults({ report, manualMode = false }: { repor
                 report.contentFixes.slice(0, 3).map((fix) => (
                   <div key={`${fix.type}-${fix.suggested}`} className="rounded-xl border border-border bg-secondary/30 p-4">
                     <div className="mb-3 flex items-center justify-between">
-                      <Badge variant="outline" className="text-primary">{fix.type}</Badge>
+                      <Badge variant="outline" className="text-primary">{contentFixLabel(fix.type)}</Badge>
                       <span className="text-xs text-muted-foreground">{fix.confidence}% conf</span>
                     </div>
 

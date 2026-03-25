@@ -1,0 +1,83 @@
+[
+  {
+    "name": "woocommerce",
+    "url": "https://www.woocommerce.com",
+    "overall": 86,
+    "mobile": 84,
+    "seo": 88,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "San Francisco",
+    "state": "California",
+    "country": "United States",
+    "lastUpdated": "2026-03-25T05:00:51.251Z"
+  },
+  {
+    "name": "shopify",
+    "url": "https://www.shopify.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T05:01:11.641Z",
+    "city": "Ottawa",
+    "state": "Ontario",
+    "country": "Canada"
+  },
+  {
+    "name": "flipkart",
+    "url": "https://www.flipkart.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 80,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T05:01:32.624Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  },
+  {
+    "name": "myntra",
+    "url": "https://www.myntra.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-25",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-25T05:01:52.777Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  },
+  {
+    "name": "nykaa",
+    "url": "https://www.nykaa.com",
+    "overall": 85,
+    "mobile": 83,
+    "seo": 86,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "Mumbai",
+    "district": "Mumbai City",
+    "state": "Maharashtra",
+    "country": "India",
+    "lastUpdated": "2026-03-25T05:00:51.251Z"
+  },
+  {
+    "name": "bigcommerce",
+    "url": "https://www.bigcommerce.com",
+    "overall": 85,
+    "mobile": 83,
+    "seo": 87,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "Austin",
+    "state": "Texas",
+    "country": "United States",
+    "lastUpdated": "2026-03-25T05:00:51.251Z"
+  }
+]

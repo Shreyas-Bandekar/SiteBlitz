@@ -270,7 +270,11 @@ export async function runAuditPipeline(
       ),
       runStageTrace(stageTrace, "screenshot", async () => {
         pipeline.push("puppeteer-screenshot");
-        return await captureScreenshots(url);
+        return await withTimeout(
+          async () => await captureScreenshots(url),
+          Math.min(SCREENSHOT_TIMEOUT_MS, Math.max(5000, PIPELINE_BUDGET_MS - (Date.now() - pipelineStartedAt))),
+          "screenshot"
+        );
       }),
       runStageTrace(stageTrace, "lighthouse", async () => withTimeout(async () => {
         pipeline.push("lighthouse");
@@ -365,9 +369,9 @@ export async function runAuditPipeline(
 
   const screenshots = screenshotResult.status === "fulfilled" ? screenshotResult.value : undefined;
   
-  // In fast mode, try to extract screenshots from Lighthouse output if available
+  // If Puppeteer screenshot is missing, try Lighthouse screenshot fallback when available.
   let enhancedScreenshots = screenshots;
-  if (fastLighthouseMode && lighthouseResult.status === "fulfilled" && !screenshots) {
+  if (lighthouseResult.status === "fulfilled" && !screenshots?.desktop && !screenshots?.mobile) {
     const lhScreenshot = (lighthouseResult.value as any)?.audits?.["full-page-screenshot"]?.details?.screenshot?.data;
     if (lhScreenshot) {
       enhancedScreenshots = { desktop: `data:image/webp;base64,${lhScreenshot}` };

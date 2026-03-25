@@ -7,15 +7,14 @@ test("stripHtmlForContentPreview removes nested tags and decodes entities", () =
   assert.equal(stripHtmlForContentPreview(""), "");
 });
 
-test("H1 current value is plain text without markup", () => {
+test("content suggestions use actionable categories", () => {
   const html = `<!DOCTYPE html><html><head><title>TechShala</title></head><body>
     <h1><span class="x">Build skills <strong>together</strong></span></h1>
   </body></html>`;
   const rows = generateContentSuggestions(html, "other", 55);
-  const h1 = rows.find((r) => r.type === "h1");
-  assert.ok(h1);
-  assert.equal(h1!.current, "Build skills together");
-  assert.ok(!h1!.current.includes("<"));
+  const kinds = rows.map((r) => r.type).sort();
+  assert.deepEqual(kinds, ["contentClarity", "conversionPath", "trustAndProof"].sort());
+  assert.ok(rows.every((r) => !r.current.includes("<")));
 });
 
 test("low-confidence neutral path avoids heavy sales or revenue framing", () => {
@@ -25,18 +24,16 @@ test("low-confidence neutral path avoids heavy sales or revenue framing", () => 
   assert.ok(!/revenue|conversion-focused|buy now/i.test(joined));
 });
 
-test("education and community signals produce non-salesy suggestions", () => {
+test("education/community content avoids hard sales claims in suggestions", () => {
   const html = `<html><head><title>TechShala — Home</title>
     <meta name="description" content="Learn together"/></head><body>
     <h1>Welcome</h1>
     <p>Join our community courses and workshops for students.</p>
   </body></html>`;
   const rows = generateContentSuggestions(html, "other", 60);
-  const title = rows.find((r) => r.type === "title");
-  assert.ok(title);
-  assert.ok(/course|workshop|community|learn/i.test(title!.suggested));
-  assert.ok(!/leads|revenue|conversion/i.test(title!.suggested));
-  assert.ok(/education|community|learning|participation/i.test(title!.reason));
+  const joined = rows.map((r) => `${r.suggested} ${r.reason}`).join(" ");
+  assert.ok(!/buy now|hard sell|instant revenue/i.test(joined));
+  assert.ok(/content|conversion|trust|proof|audience|service/i.test(joined));
 });
 
 test("confidence is computed and identical for the same inputs", () => {

@@ -21,7 +21,7 @@ export type AuditResult = {
 };
 
 export type ContentSuggestion = {
-  type: "title" | "metaDescription" | "h1";
+  type: "contentClarity" | "conversionPath" | "trustAndProof";
   current: string;
   suggested: string;
   reason: string;
@@ -404,223 +404,112 @@ export function analyzeWebsite(htmlRaw: string, pagespeedRaw: any): AuditResult 
 
 export function generateContentSuggestions(htmlRaw: string, industry: string, industryConfidence: number): ContentSuggestion[] {
   const html = String(htmlRaw || "");
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const metaMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["'][^>]*>/i);
+  const plain = stripHtmlForContentPreview(html).toLowerCase();
+  const errorPageDetected = isLikelyErrorPage(html);
 
-  const extractedTitle = normalizeContentField(stripHtmlForContentPreview(titleMatch?.[1] || ""));
-  const extractedH1 = normalizeContentField(stripHtmlForContentPreview(h1Match?.[1] || ""));
-  const extractedMeta = normalizeContentField(stripHtmlForContentPreview(metaMatch?.[1] || ""));
+  const formCount = (html.match(/<form[\s>]/gi) || []).length;
+  const ctaCount =
+    (plain.match(/\b(book demo|get started|contact us|call now|request quote|start free trial|get quote|talk to us|schedule call)\b/gi) || [])
+      .length;
+  const proofCount =
+    (plain.match(/\b(testimonial|client|case stud|portfolio|review|rating|trusted by|award|certified|experience)\b/gi) || []).length;
+  const serviceKeywordCount =
+    (plain.match(/\b(web development|mobile app|crm|erp|pos|shopify|wordpress|digital marketing|seo|ai|machine learning)\b/gi) || [])
+      .length;
 
-  const errorPageDetected =
-    isLikelyErrorPage(html) ||
-    [extractedTitle, extractedH1, extractedMeta].some((v) => isErrorLikeText(v));
+  const clarityConfidence = Math.max(45, Math.min(96, Math.round(industryConfidence * 0.55 + serviceKeywordCount * 5)));
+  const conversionConfidence = Math.max(40, Math.min(95, Math.round(industryConfidence * 0.45 + ctaCount * 10 + formCount * 12)));
+  const trustConfidence = Math.max(38, Math.min(94, Math.round(industryConfidence * 0.5 + proofCount * 8)));
 
-  const currentTitle = sanitizeCurrentField(extractedTitle);
-  const currentH1 = sanitizeCurrentField(extractedH1);
-  const currentMeta = sanitizeCurrentField(extractedMeta);
-  const displayTitle = errorPageDetected ? "Missing" : currentTitle;
-  const displayH1 = errorPageDetected ? "Missing" : currentH1;
-  const displayMeta = errorPageDetected ? "Missing" : currentMeta;
-
-  const { tier, eduScore, commercialScore } = resolveContentIntentTier(html, industry);
-  const intentClarity = intentClarityForConfidence(eduScore, commercialScore);
-  const brand = extractBrandHint(displayTitle) || extractBrandHint(displayH1);
-  const topicPhrase = buildTopicPhrase([displayH1, displayTitle, displayMeta]);
-  const useIndustryInCopy =
-    industryConfidence >= 72 &&
-    industry !== "other" &&
-    tier === "commercial" &&
-    industrySignalPresent(`${displayTitle} ${displayH1} ${displayMeta} ${html.slice(0, 3000)}`, industry);
-
-  const guidelinesCommercial = useIndustryInCopy
-    ? [`Align headline with ${industry} buyer intent.`, "Use specific outcomes and credibility cues.", "Keep metadata human-readable and concise."]
-    : ["Lead with a clear offer and who it serves.", "Add a concrete next step (trial, demo, purchase).", "Avoid vague superlatives; prefer proof or specificity."];
-
-  const guidelinesEducation = [
-    "Lead with learning outcomes, community value, or mission.",
-    "Keep tone welcoming; avoid hard-sell or revenue framing.",
-    "Meta: who it’s for, what they can explore, and one clear next step.",
-  ];
-
-  const guidelinesNeutral = [
-    "State the page topic and audience in plain language.",
-    "Keep title and H1 closely aligned.",
-    "Meta description: value + audience + one next step (about 150–160 characters).",
-  ];
-
-  const guidelinesError = [
-    "This result likely came from a blocked/error page, not your intended content.",
-    "Verify URL, access permissions, and anti-bot/CDN settings, then rerun.",
-    "Use title/meta/H1 suggestions only after a successful live fetch.",
-  ];
-
-  let titlePack: { suggested: string; reason: string; alignment: number };
-  let metaPack: { suggested: string; reason: string; alignment: number };
-  let h1Pack: { suggested: string; reason: string; alignment: number };
+  const industryLabel = industry.replace(/_/g, " ");
 
   if (errorPageDetected) {
-    titlePack = {
-      suggested: "Page unavailable during scan - verify access and retry",
-      reason: "The fetched content appears to be an error/blocked page, so content recommendations are conservative until a valid page is scanned.",
-      alignment: 2,
-    };
-    metaPack = {
-      suggested:
-        "We could not read a valid page description from this URL. Check URL accuracy, access controls, and CDN/firewall rules, then rerun the audit.",
-      reason: "Meta suggestion switched to recovery guidance because source content was error-like.",
-      alignment: 2,
-    };
-    h1Pack = {
-      suggested: "This page could not be audited right now",
-      reason: "H1 recommendation avoids reusing error text and focuses on retry guidance.",
-      alignment: 2,
-    };
-  } else if (tier === "education_community") {
-    const head = brand ? `${brand} — ` : "";
-    titlePack = {
-      suggested: `${head}Courses, workshops, and community learning`,
-      reason: `Education/community signals in page copy (score ${eduScore}) — suggestions emphasize learning and participation, not sales funnels.`,
-      alignment: 12,
-    };
-    metaPack = {
-      suggested:
-        "Explore programs, workshops, and ways to connect. See what you can learn, who it’s for, and how to get started.",
-      reason: "Meta tuned for learning and community discovery based on detected page intent.",
-      alignment: 12,
-    };
-    h1Pack = {
-      suggested: brand ? `${brand}: learn and connect` : "Welcome — explore courses, workshops, and community",
-      reason: "H1 focuses on participation and clarity for education- or community-oriented visitors.",
-      alignment: 12,
-    };
-  } else if (tier === "commercial") {
-    const readableTopic = topicPhrase || (brand ? brand.toLowerCase() : "your website");
-    const cleanTopic = trimWords(readableTopic, 7);
-    const start = brand ? `${brand} | ` : "";
-    const commercialTitleCore = useIndustryInCopy
-      ? `${toSentenceCase(cleanTopic)} for ${industry.replace(/_/g, " ")} growth`
-      : `${toSentenceCase(cleanTopic)} with faster, clearer conversion flow`;
-    const commercialMetaCore = useIndustryInCopy
-      ? `Live audit insights for your ${industry.replace(/_/g, " ")} presence: improve speed, SEO, trust signals, and conversion with clear next actions.`
-      : `Live audit insights for ${cleanTopic}: improve speed, SEO, trust signals, and conversion with clear next actions.`;
-    const h1Base = currentH1 !== "Missing" ? trimWords(currentH1, 8) : toSentenceCase(trimWords(cleanTopic, 8));
-
-    if (useIndustryInCopy) {
-      titlePack = {
-        suggested: trimChars(`${start}${commercialTitleCore}`, 68),
-        reason: `Commercial signals (score ${commercialScore}) and confident industry match (${industry}) support outcome-oriented copy.`,
-        alignment: 14,
-      };
-      metaPack = {
-        suggested: trimChars(commercialMetaCore, 170),
-        reason: "Description matches detected commercial intent and industry category.",
-        alignment: 14,
-      };
-      h1Pack = {
-        suggested: trimChars(`${h1Base} with a clearer, faster experience`, 95),
-        reason: "H1 emphasizes measurable outcomes aligned with commercial page signals.",
-        alignment: 14,
-      };
-    } else {
-      titlePack = {
-        suggested: trimChars(`${start}${toSentenceCase(commercialTitleCore)}`, 68),
-        reason: `Commercial cues present (score ${commercialScore}) but industry fit is uncertain — copy stays specific without naming the wrong market.`,
-        alignment: 10,
-      };
-      metaPack = {
-        suggested: trimChars(commercialMetaCore, 170),
-        reason: "Safe commercial-leaning meta without assuming a narrow industry label.",
-        alignment: 10,
-      };
-      h1Pack = {
-        suggested: trimChars(`${h1Base} with clearer value and a stronger next step`, 95),
-        reason: "H1 guidance stays conversion-aware but avoids incorrect vertical language.",
-        alignment: 10,
-      };
-    }
-  } else {
-    titlePack = {
-      suggested: brand
-        ? `${brand} — what we offer and how to get involved`
-        : "Clear site focus: what visitors find here and who it’s for",
-      reason: `Neutral intent (education ${eduScore}, commercial ${commercialScore}) — copy avoids aggressive sales language.`,
-      alignment: 8,
-    };
-    metaPack = {
-      suggested:
-        "Describe what this site or page provides, who benefits, and the simplest next step — without sounding like a sales pitch.",
-      reason: "Balanced meta for pages without strong commercial or learning signals.",
-      alignment: 8,
-    };
-    h1Pack = {
-      suggested: brand ? `${brand} — welcome` : "A simple, accurate headline for this page",
-      reason: "H1 stays informational and welcoming when page intent is mixed or unclear.",
-      alignment: 8,
-    };
+    return [
+      {
+        type: "contentClarity",
+        current: "Page content could not be reliably read.",
+        suggested: "Fix page access/CDN restrictions and rerun content analysis.",
+        reason: "The scan detected an error/blocked response, so content recommendations are conservative.",
+        confidence: 30,
+        guidelineBullets: [
+          "Verify URL and access permissions.",
+          "Allow crawler traffic via CDN/firewall rules.",
+          "Rerun audit after successful live render.",
+        ],
+      },
+      {
+        type: "conversionPath",
+        current: "Conversion flow not measurable from current response.",
+        suggested: "Revalidate hero CTA + contact form placement after fetch succeeds.",
+        reason: "Conversion guidance requires real page content, not error pages.",
+        confidence: 28,
+        guidelineBullets: ["Place one primary CTA above the fold.", "Keep contact form short (3-5 fields).", "Repeat CTA at section breaks."],
+      },
+      {
+        type: "trustAndProof",
+        current: "Trust elements could not be evaluated.",
+        suggested: "Re-check testimonials, case studies, and client proof once page is accessible.",
+        reason: "Trust analysis needs full page content and visible proof blocks.",
+        confidence: 28,
+        guidelineBullets: ["Add recognizable client logos.", "Add 2-3 short proof-driven case studies.", "Display social proof near CTA."],
+      },
+    ];
   }
-
-  const gTitle = fieldEvidenceQuality(displayTitle, "title");
-  const gMeta = fieldEvidenceQuality(displayMeta, "metaDescription");
-  const gH1 = fieldEvidenceQuality(displayH1, "h1");
-
-  const confTitle = computeContentSuggestionConfidence({
-    industryConfidence,
-    fieldPresent: gTitle.present,
-    fieldQuality: gTitle.quality,
-    intentClarity,
-    tierAlignmentBonus: titlePack.alignment,
-    errorPageDetected,
-  });
-  const confMeta = computeContentSuggestionConfidence({
-    industryConfidence,
-    fieldPresent: gMeta.present,
-    fieldQuality: gMeta.quality,
-    intentClarity,
-    tierAlignmentBonus: metaPack.alignment,
-    errorPageDetected,
-  });
-  const confH1 = computeContentSuggestionConfidence({
-    industryConfidence,
-    fieldPresent: gH1.present,
-    fieldQuality: gH1.quality,
-    intentClarity,
-    tierAlignmentBonus: h1Pack.alignment,
-    errorPageDetected,
-  });
-
-  const bullets = errorPageDetected
-    ? guidelinesError
-    : tier === "education_community"
-      ? guidelinesEducation
-      : tier === "commercial"
-        ? guidelinesCommercial
-        : guidelinesNeutral;
 
   return [
     {
-      type: "title",
-      current: displayTitle,
-      suggested: titlePack.suggested,
-      reason: titlePack.reason,
-      confidence: confTitle,
-      guidelineBullets: bullets,
+      type: "contentClarity",
+      current:
+        serviceKeywordCount >= 3
+          ? `Service messaging is visible (${serviceKeywordCount} key service signals detected).`
+          : "Service messaging is generic or scattered.",
+      suggested:
+        serviceKeywordCount >= 3
+          ? `Reframe hero and section intros around one primary offer + one supporting offer for ${industryLabel}.`
+          : `Add a clear service stack headline (what you deliver, for whom, and expected outcome) for ${industryLabel} visitors.`,
+      reason: "This suggestion is based on actual service/solution phrases found in page copy, not just metadata tags.",
+      confidence: clarityConfidence,
+      guidelineBullets: [
+        "Lead with business outcome, not feature list.",
+        "Keep first screen focused on one main offer.",
+        "Use short proof-backed service blocks.",
+      ],
     },
     {
-      type: "metaDescription",
-      current: displayMeta,
-      suggested: metaPack.suggested,
-      reason: metaPack.reason,
-      confidence: confMeta,
-      guidelineBullets: bullets,
+      type: "conversionPath",
+      current:
+        formCount > 0 && ctaCount >= 2
+          ? `Conversion signals are present (forms: ${formCount}, CTA phrases: ${ctaCount}).`
+          : `Weak conversion path (forms: ${formCount}, CTA phrases: ${ctaCount}).`,
+      suggested:
+        formCount === 0
+          ? "Add a visible lead form near the primary CTA and repeat CTA in each major section."
+          : "Strengthen CTA hierarchy: one primary CTA + one secondary CTA, with consistent labels across the page.",
+      reason: "Built from detected CTA wording and form presence across the rendered page content.",
+      confidence: conversionConfidence,
+      guidelineBullets: [
+        "Keep one primary conversion goal per page.",
+        "Use action-oriented CTA copy.",
+        "Reduce friction in inquiry/contact forms.",
+      ],
     },
     {
-      type: "h1",
-      current: displayH1,
-      suggested: h1Pack.suggested,
-      reason: h1Pack.reason,
-      confidence: confH1,
-      guidelineBullets: bullets,
+      type: "trustAndProof",
+      current:
+        proofCount >= 3
+          ? `Trust/proof elements are visible (${proofCount} trust indicators found).`
+          : "Trust signals are limited or not prominent.",
+      suggested:
+        proofCount >= 3
+          ? "Move strongest proof (case result, client logos, testimonial) closer to first CTA."
+          : "Add concrete proof blocks: client logos, mini case studies, and testimonial snippets near conversion sections.",
+      reason: "Derived from proof-related terms in content (case studies, testimonials, client references).",
+      confidence: trustConfidence,
+      guidelineBullets: [
+        "Show measurable outcomes where possible.",
+        "Place trust proof near decision points.",
+        "Keep testimonials short and specific.",
+      ],
     },
   ];
 }

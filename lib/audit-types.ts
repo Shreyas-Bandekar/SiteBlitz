@@ -92,7 +92,7 @@ export type ROIResult = {
 };
 
 export type ContentFix = {
-  type: "title" | "metaDescription" | "h1";
+  type: "contentClarity" | "conversionPath" | "trustAndProof";
   current: string;
   suggested: string;
   reason: string;
