@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { Suspense, type FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -12,7 +12,7 @@ import {
 } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
@@ -115,5 +115,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-md items-center px-4 py-10" />}>
+      <LoginForm />
+    </Suspense>
   );
 }
