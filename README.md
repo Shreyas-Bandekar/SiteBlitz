@@ -29,7 +29,6 @@ Live website auditing platform built with Next.js. SiteBlitz scans a target URL 
 - axe-core
 - Vercel Postgres (`@vercel/postgres`)
 - Gemini integration (`@google/generative-ai`, `@ai-sdk/google`)
-- Optional Flask/OpenCV microservice for visual CV scoring
 
 ## Quick Start
 
@@ -131,22 +130,6 @@ Request body:
 }
 ```
 
-## Optional Flask CV Service
-
-SiteBlitz can call a small Flask service for screenshot-based visual scoring if `FLASK_CV_URL` is set.
-
-### Run locally
-
-```bash
-cd flask-cv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
-```
-
-Service default: `http://127.0.0.1:5000`.
-
 ## System Flow
 
 1. Validate request URL.
@@ -165,7 +148,6 @@ Service default: `http://127.0.0.1:5000`.
 - `lib/`: Audit pipeline, scoring, AI, trust, ROI, persistence logic.
 - `tests/`: Deterministic and integration-like unit tests.
 - `docs/`: Status and feature documentation.
-- `flask-cv/`: Optional computer-vision service.
 
 ## Testing
 

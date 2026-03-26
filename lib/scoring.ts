@@ -15,6 +15,8 @@ export function computeScores(input: {
   lighthousePerformance: number;
   lighthouseSeo: number;
   lighthouseAccessibility: number;
+  lighthouseBestPractices?: number;
+  lighthouseAvailable?: boolean;
   hasViewport: boolean;
   mobileTapTargetsOk: boolean;
   h1Count: number;
@@ -33,16 +35,8 @@ export function computeScores(input: {
     0,
     100
   );
-  const seo = clamp(
-    Math.round(
-      input.lighthouseSeo * 0.7 +
-        (input.titlePresent ? 12 : -10) +
-        (input.metaDescriptionPresent ? 8 : -6) +
-        (input.h1Count === 1 ? 6 : -6)
-    ),
-    0,
-    100
-  );
+  // Keep Lighthouse category scores as source-of-truth when available.
+  const seo = clamp(Math.round(input.lighthouseSeo), 0, 100);
   const mobileBase = clamp(
     55 + (input.hasViewport ? 20 : -20) + (input.mobileTapTargetsOk ? 15 : -12),
     0,
@@ -65,9 +59,26 @@ export function computeScores(input: {
     leadConversion = Math.max(70, leadConversionBase);
   }
 
-  let overall = Math.round(
-    uiux * 0.2 + seo * 0.2 + mobile * 0.15 + performance * 0.2 + accessibility * 0.15 + leadConversion * 0.1
+  const lighthouseAvailable = Boolean(input.lighthouseAvailable);
+  const lighthouseBestPractices = clamp(
+    Math.round(input.lighthouseBestPractices ?? (input.lighthousePerformance + input.lighthouseSeo + input.lighthouseAccessibility) / 3),
+    0,
+    100
   );
+
+  let overall: number;
+  if (lighthouseAvailable) {
+    // Prioritize Lighthouse parity: mostly Lighthouse category composite + a small conversion/UI signal blend.
+    const lighthouseComposite = Math.round(
+      (performance + seo + accessibility + lighthouseBestPractices) / 4
+    );
+    const diagnosticComposite = Math.round((uiux + mobile + leadConversion) / 3);
+    overall = Math.round(lighthouseComposite * 0.85 + diagnosticComposite * 0.15);
+  } else {
+    overall = Math.round(
+      uiux * 0.2 + seo * 0.2 + mobile * 0.15 + performance * 0.2 + accessibility * 0.15 + leadConversion * 0.1
+    );
+  }
 
   if (input.ecommerceHint) {
     const qualitySignals = [seo >= 80, accessibility >= 80, mobile >= 80].filter(Boolean).length;

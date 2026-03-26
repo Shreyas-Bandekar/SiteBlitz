@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { detectIndustry, isEcommerceStorefrontHint } from "../lib/industry";
 import { extractLiveAnalytics } from "../lib/live-analytics";
 import { calculateRealROI } from "../lib/roi";
-import { classifyFailedStage, resolveEnrichmentFlags } from "../app/api/audit/route";
+import {
+  classifyFailedStage,
+  resolveEnrichmentFlags,
+} from "../app/api/audit/route";
 import { detectBlockedResponseFromHtml } from "../lib/audit-pipeline";
 
 test("industry detection confidence gating", () => {
@@ -16,12 +19,24 @@ test("industry detection confidence gating", () => {
 
 test("ecommerce storefront hint from URL or Shopify assets", () => {
   assert.equal(isEcommerceStorefrontHint("", "https://www.shopify.com/"), true);
-  assert.equal(isEcommerceStorefrontHint("", "https://cool-shoes.myshopify.com/"), true);
   assert.equal(
-    isEcommerceStorefrontHint('<script src="https://cdn.shopify.com/s/files/1/theme.js"></script>', "https://example.com/"),
-    true
+    isEcommerceStorefrontHint("", "https://cool-shoes.myshopify.com/"),
+    true,
   );
-  assert.equal(isEcommerceStorefrontHint("<html><body>Hello</body></html>", "https://example.com/"), false);
+  assert.equal(
+    isEcommerceStorefrontHint(
+      '<script src="https://cdn.shopify.com/s/files/1/theme.js"></script>',
+      "https://example.com/",
+    ),
+    true,
+  );
+  assert.equal(
+    isEcommerceStorefrontHint(
+      "<html><body>Hello</body></html>",
+      "https://example.com/",
+    ),
+    false,
+  );
 });
 
 test("live analytics parser extracts public script signals", () => {
@@ -44,13 +59,21 @@ test("live analytics parser extracts public script signals", () => {
 
 test("real ROI is null when required signals are missing", () => {
   const roi = calculateRealROI(
-    { uiux: 60, seo: 60, mobile: 60, performance: 60, accessibility: 60, leadConversion: 60, overall: 60 },
+    {
+      uiux: 60,
+      seo: 60,
+      mobile: 60,
+      performance: 60,
+      accessibility: 60,
+      leadConversion: 60,
+      overall: 60,
+    },
     {
       ga4Id: { value: "G-ABCDE1234", confidence: 95, evidence: [] },
       monthlyUsers: { value: null, confidence: 0, evidence: [] },
       avgOrderValue: { value: null, confidence: 0, evidence: [] },
       conversionRate: { value: null, confidence: 0, evidence: [] },
-    }
+    },
   );
 
   assert.equal(roi.roi, null);
@@ -59,13 +82,21 @@ test("real ROI is null when required signals are missing", () => {
 
 test("real ROI is computed from real analytics values", () => {
   const roi = calculateRealROI(
-    { uiux: 70, seo: 72, mobile: 68, performance: 64, accessibility: 75, leadConversion: 60, overall: 68 },
+    {
+      uiux: 70,
+      seo: 72,
+      mobile: 68,
+      performance: 64,
+      accessibility: 75,
+      leadConversion: 60,
+      overall: 68,
+    },
     {
       ga4Id: { value: "G-ABCDE1234", confidence: 95, evidence: [] },
       monthlyUsers: { value: 12000, confidence: 80, evidence: [] },
       avgOrderValue: { value: 2800, confidence: 80, evidence: [] },
       conversionRate: { value: 0.023, confidence: 80, evidence: [] },
-    }
+    },
   );
 
   assert.ok(roi.roi);
@@ -74,9 +105,18 @@ test("real ROI is computed from real analytics values", () => {
 });
 
 test("failedStage mapping classifies timeout stages", () => {
-  assert.equal(classifyFailedStage("lighthouse timed out after 25000ms"), "lighthouse");
-  assert.equal(classifyFailedStage("ai stage failed: ai:model not installed"), "ai");
-  assert.equal(classifyFailedStage("playwright timed out after 12000ms"), "playwright");
+  assert.equal(
+    classifyFailedStage("lighthouse timed out after 25000ms"),
+    "lighthouse",
+  );
+  assert.equal(
+    classifyFailedStage("ai stage failed: ai:model not installed"),
+    "ai",
+  );
+  assert.equal(
+    classifyFailedStage("playwright timed out after 12000ms"),
+    "playwright",
+  );
 });
 
 test("enrichment flags default to core-only mode", () => {
@@ -86,8 +126,12 @@ test("enrichment flags default to core-only mode", () => {
   assert.equal(defaults.strictDb, false);
 });
 
-test("fast mode request shape skips heavy Gemini enrichment", () => {
-  const fastFlags = resolveEnrichmentFlags({ enrichAi: false, enrichCompetitors: false, strictDb: false });
+test("fast mode request shape skips heavy AI enrichment", () => {
+  const fastFlags = resolveEnrichmentFlags({
+    enrichAi: false,
+    enrichCompetitors: false,
+    strictDb: false,
+  });
   assert.equal(fastFlags.enrichAi, false);
   assert.equal(fastFlags.enrichCompetitors, false);
 });
@@ -109,6 +153,19 @@ test("blocked-response detector ignores normal pages", () => {
     <body>
       <h1>Welcome to TechShala</h1>
       <p>Workshops, lectures, and events for students.</p>
+    </body></html>
+  `;
+  assert.equal(detectBlockedResponseFromHtml(okHtml), false);
+});
+
+test("blocked-response detector avoids false positives on normal content mentioning errors", () => {
+  const okHtml = `
+    <html><head><title>Docs - Troubleshooting</title></head>
+    <body>
+      <h1>Troubleshooting Guide</h1>
+      <p>If you see a 404 not found page, clear cache and retry.</p>
+      <p>This article explains common deployment issues and fixes.</p>
+      <p>Contact support for help.</p>
     </body></html>
   `;
   assert.equal(detectBlockedResponseFromHtml(okHtml), false);

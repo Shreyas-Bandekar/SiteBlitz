@@ -8,7 +8,7 @@ const industryToDomains: Record<IndustryCategory, string[]> = {
   media: ["bbc.com", "theguardian.com", "ndtv.com"],
   nonprofit: ["unicef.org", "worldwildlife.org", "cry.org"],
   manufacturing: ["siemens.com", "bosch.com", "global.abb"],
-  other: ["wikipedia.org", "mozilla.org", "github.com"],
+  other: ["semrush.com", "ahrefs.com", "gtmetrix.com"],
 };
 
 export async function runLiveCompetitorAudits(input: {

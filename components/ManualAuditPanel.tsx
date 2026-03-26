@@ -23,18 +23,12 @@ export function ScoreTable({ uxIssues, leadIssues, deviceResults, uxScore, leadS
       <div className="px-5 py-4 border-b border-indigo-500/20 flex flex-wrap items-center gap-3">
         <Shield className="h-4 w-4 text-indigo-400" />
         <span className="text-sm font-bold text-indigo-300 uppercase tracking-widest">
-          Website Health Check — Score Table
+          Manual Rules — Score Table
         </span>
         <Badge variant="outline" className="border-indigo-400/40 text-indigo-400 text-[10px] ml-auto">
-          Rule-based and consistent
+          No AI Dependency
         </Badge>
-        <Badge variant="secondary">25 Manual Checks + AI Notes (Optional)</Badge>
-      </div>
-
-      <div className="px-5 py-3 border-b border-indigo-500/20 bg-indigo-500/5">
-        <p className="text-xs text-foreground/80">
-          This table is based on fixed quality rules, so scores stay stable across runs. AI suggestions are shown separately and do not change this score.
-        </p>
+        <Badge variant="secondary">Groq AI + 25 Manual Rules</Badge>
       </div>
 
       {/* Score summary row */}
@@ -74,9 +68,7 @@ export function ScoreTable({ uxIssues, leadIssues, deviceResults, uxScore, leadS
           ))}
         </div>
       ) : (
-        <p className="px-5 py-6 text-center text-sm text-muted-foreground">
-          No manual-rule issues were flagged in the current scan data. If this looks unexpected, run a full scan again after page load completes.
-        </p>
+        <p className="px-5 py-6 text-center text-sm text-muted-foreground">No manual rule issues detected.</p>
       )}
 
       {/* Device Results */}

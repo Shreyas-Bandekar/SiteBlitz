@@ -24,9 +24,9 @@ const LABELS: Array<{ key: keyof Scores; title: string; weight?: string }> = [
 ];
 
 function getBarColor(score: number) {
-  if (score >= 80) return "bg-success";
-  if (score >= 60) return "bg-warning";
-  return "bg-destructive";
+  if (score >= 80) return "bg-emerald-400";
+  if (score >= 60) return "bg-amber-400";
+  return "bg-rose-400";
 }
 
 function severityLabel(score: number) {
@@ -36,12 +36,18 @@ function severityLabel(score: number) {
 }
 
 function severityColor(score: number) {
-  if (score >= 80) return "text-success";
-  if (score >= 60) return "text-warning";
-  return "text-destructive";
+  if (score >= 80) return "text-emerald-300";
+  if (score >= 60) return "text-amber-300";
+  return "text-rose-300";
 }
 
-export default function AuditCards({ scores, industryAverageOverall }: { scores: Scores; industryAverageOverall?: number }) {
+export default function AuditCards({
+  scores,
+  industryAverageOverall,
+}: {
+  scores: Scores;
+  industryAverageOverall?: number;
+}) {
   const [display, setDisplay] = useState<Record<string, number>>({});
 
   const fields = useMemo(
@@ -50,7 +56,7 @@ export default function AuditCards({ scores, industryAverageOverall }: { scores:
         ...entry,
         value: scores[entry.key],
       })),
-    [scores]
+    [scores],
   );
 
   useEffect(() => {
@@ -74,39 +80,63 @@ export default function AuditCards({ scores, industryAverageOverall }: { scores:
       {fields.map((item) => {
         const value = display[item.key] ?? 0;
         return (
-          <Card key={item.key} className="hover:border-foreground/20 transition-colors">
+          <Card
+            key={item.key}
+            className="liquid-glass-soft transition-colors hover:border-emerald-300/40"
+          >
             <CardContent className="p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground/80">{item.title}</h3>
-                <span className="text-xs font-mono text-muted-foreground">{item.weight} weight</span>
+                <h3 className="text-sm font-semibold text-emerald-100">
+                  {item.title}
+                </h3>
+                <span className="text-xs font-mono text-emerald-100/55">
+                  {item.weight} weight
+                </span>
               </div>
               <div className="mb-1 flex items-baseline gap-2">
-                <span className="text-3xl font-bold tracking-tight text-foreground">{value}</span>
-                <span className={`text-xs font-semibold uppercase ${severityColor(value)}`}>
+                <span className="text-3xl font-bold tracking-tight text-emerald-50">
+                  {value}
+                </span>
+                <span
+                  className={`text-xs font-semibold uppercase ${severityColor(value)}`}
+                >
                   {severityLabel(value)}
                 </span>
               </div>
-              <Progress value={value} className="mt-4 h-2 bg-secondary" indicatorClassName={getBarColor(value)} />
+              <Progress
+                value={value}
+                className="mt-4 h-2 bg-emerald-950/70"
+                indicatorClassName={getBarColor(value)}
+              />
             </CardContent>
           </Card>
         );
       })}
 
       {typeof industryAverageOverall === "number" ? (
-        <Card className="border-primary bg-primary/5 transition-colors">
+        <Card className="liquid-glass transition-colors">
           <CardContent className="p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-primary">Competitor Delta</h3>
-              <span className="text-xs font-mono text-muted-foreground">Benchmark</span>
+              <h3 className="text-sm font-semibold text-emerald-200">
+                Competitor Delta
+              </h3>
+              <span className="text-xs font-mono text-emerald-100/60">
+                Benchmark
+              </span>
             </div>
             <div className="mb-1 flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-foreground">
+              <span className="text-3xl font-bold tracking-tight text-emerald-50">
                 {scores.overall - industryAverageOverall > 0 ? "+" : ""}
                 {scores.overall - industryAverageOverall}
               </span>
-              <span className="text-xs font-semibold uppercase text-primary">Points vs Avg</span>
+              <span className="text-xs font-semibold uppercase text-emerald-300">
+                Points vs Avg
+              </span>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">Your overall score compared to the industry average of {industryAverageOverall}.</p>
+            <p className="mt-4 text-xs text-emerald-100/70">
+              Your overall score compared to the industry average of{" "}
+              {industryAverageOverall}.
+            </p>
           </CardContent>
         </Card>
       ) : null}

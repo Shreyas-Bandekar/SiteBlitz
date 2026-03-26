@@ -10,7 +10,7 @@
     "city": "San Francisco",
     "state": "California",
     "country": "United States",
-    "lastUpdated": "2026-03-25T05:00:51.251Z"
+    "lastUpdated": "2026-03-25T10:25:25.152Z"
   },
   {
     "name": "shopify",
@@ -20,7 +20,7 @@
     "seo": 100,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T05:01:11.641Z",
+    "lastUpdated": "2026-03-25T10:25:57.233Z",
     "city": "Ottawa",
     "state": "Ontario",
     "country": "Canada"
@@ -33,7 +33,7 @@
     "seo": 80,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T05:01:32.624Z",
+    "lastUpdated": "2026-03-25T10:26:29.118Z",
     "city": "Bengaluru",
     "district": "Bangalore Urban",
     "state": "Karnataka",
@@ -47,25 +47,11 @@
     "seo": 100,
     "auditedDate": "2026-03-25",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T05:01:52.777Z",
+    "lastUpdated": "2026-03-25T10:26:59.737Z",
     "city": "Bengaluru",
     "district": "Bangalore Urban",
     "state": "Karnataka",
     "country": "India"
-  },
-  {
-    "name": "nykaa",
-    "url": "https://www.nykaa.com",
-    "overall": 85,
-    "mobile": 83,
-    "seo": 86,
-    "auditedDate": "2026-03-20",
-    "sourceType": "pre-audited",
-    "city": "Mumbai",
-    "district": "Mumbai City",
-    "state": "Maharashtra",
-    "country": "India",
-    "lastUpdated": "2026-03-25T05:00:51.251Z"
   },
   {
     "name": "bigcommerce",
@@ -78,6 +64,6 @@
     "city": "Austin",
     "state": "Texas",
     "country": "United States",
-    "lastUpdated": "2026-03-25T05:00:51.251Z"
+    "lastUpdated": "2026-03-25T10:25:25.152Z"
   }
 ]

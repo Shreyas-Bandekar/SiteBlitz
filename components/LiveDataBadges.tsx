@@ -30,9 +30,9 @@ export function LiveDataBadges({ sources, isLive }: LiveDataBadgesProps) {
   return (
     <div className="flex flex-wrap gap-2 mb-6">
       {isLive && (
-        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/50 backdrop-blur-sm">
+        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-300/45 backdrop-blur-sm">
           <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+          <span className="text-sm font-semibold text-emerald-200">
             Live Data
           </span>
         </div>
@@ -41,16 +41,16 @@ export function LiveDataBadges({ sources, isLive }: LiveDataBadgesProps) {
       {sources.map((source, idx) => (
         <div
           key={idx}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-400/40 backdrop-blur-sm hover:bg-blue-500/15 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-300/35 bg-emerald-500/10 px-3 py-2 backdrop-blur-sm transition-colors hover:bg-emerald-500/15"
         >
-          <span className="text-xs font-mono text-blue-700 dark:text-blue-300">
+          <span className="text-xs font-mono text-emerald-200">
             {source.name}
           </span>
-          <span className="text-xs text-gray-600 dark:text-gray-400">
+          <span className="text-xs text-emerald-100/65">
             {formatTimestamp(source.timestamp)}
           </span>
           {source.confidence && (
-            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+            <span className="text-xs font-semibold text-emerald-300">
               {source.confidence}%
             </span>
           )}
@@ -73,11 +73,11 @@ export function CompetitorLiveBadge({
   const isLive = sourceType === "live";
 
   return (
-    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/50">
+    <div className="inline-flex items-center gap-1 rounded-md border border-emerald-300/35 bg-emerald-500/10 px-2 py-1 text-xs font-medium">
       {isLive && (
-        <span className="inline-block w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></span>
+        <span className="inline-block w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
       )}
-      <span className={isLive ? "text-orange-600 dark:text-orange-400" : "text-gray-600"}>
+      <span className={isLive ? "text-emerald-200" : "text-emerald-100/75"}>
         {formatTimestamp(auditedDate)}
       </span>
     </div>
@@ -89,8 +89,8 @@ export function CompetitorLiveBadge({
  */
 export function ROISourceBadge({ source }: { source: string }) {
   return (
-    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-violet-500/15 to-purple-500/15 border border-violet-400/40">
-      <span className="text-violet-700 dark:text-violet-300">📊 {source}</span>
+    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-emerald-500/10 px-3 py-1 text-xs font-medium">
+      <span className="text-emerald-200">📊 {source}</span>
     </div>
   );
 }
@@ -113,16 +113,12 @@ export function IndustryBadge({
     .join(" ");
 
   return (
-    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-500/15 to-blue-500/15 border border-indigo-400/40 backdrop-blur-sm">
-      <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+    <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-300/35 bg-emerald-500/10 px-3 py-2 backdrop-blur-sm">
+      <span className="text-sm font-semibold text-emerald-200">
         🧠 {displayCategory}
       </span>
-      <span className="text-xs text-indigo-600 dark:text-indigo-400">
-        {confidence}%
-      </span>
-      <span className="text-xs text-gray-500 dark:text-gray-400">
-        ({method})
-      </span>
+      <span className="text-xs text-emerald-300">{confidence}%</span>
+      <span className="text-xs text-emerald-100/65">({method})</span>
     </div>
   );
 }

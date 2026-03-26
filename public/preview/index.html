@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiteBlitz Redesign Preview | Premium Website Audits</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; }
+        .glass-hero { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(148, 163, 184, 0.1); }
+        .glow-cyan { text-shadow: 0 0 20px rgba(6, 182, 212, 0.5); }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0px); } }
+        .gradient-border { border: 1px solid transparent; background: linear-gradient(#020617, #020617) padding-box, linear-gradient(to right, #22d3ee, #3b82f6) border-box; }
+        .feature-card:hover { border-color: rgba(34, 211, 238, 0.3); transform: translateY(-5px); transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+    <!-- Navbar Snippet -->
+    <nav class="fixed top-0 left-0 w-full z-50 px-6 py-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm">
+        <div class="flex items-center gap-2 font-black text-xl tracking-tighter">
+            <i data-lucide="zap" class="w-6 h-6 text-cyan-400 fill-cyan-400"></i>
+            SITE<span class="text-cyan-400">BLITZ</span>
+        </div>
+        <div class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
+            <a href="#features" class="hover:text-white transition-colors">Features</a>
+            <a href="#roi" class="hover:text-white transition-colors">ROI Insights</a>
+            <a href="#about" class="hover:text-white transition-colors">About</a>
+        </div>
+        <button class="px-5 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold transition-all">
+            Login
+        </button>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative min-h-screen flex flex-col items-center justify-center pt-32 pb-20 px-6">
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-cyan-500/10 blur-[150px] rounded-full opacity-50"></div>
+        
+        <div class="relative z-10 max-w-5xl w-full text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-widest mb-8">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                New: AI-Powered Lead-Gen Scoring
+            </div>
+            
+            <h1 class="text-6xl md:text-8xl font-black tracking-tight mb-8 leading-tight">
+                Blitz Your Site to <br>
+                <span class="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent glow-cyan">Professional Perfection</span>
+            </h1>
+            
+            <p class="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-12">
+                The high-precision audit engine for SMBs. 50+ data points, Gemini-powered insights, 
+                and actionable ROI reports in under 30 seconds.
+            </p>
+
+            <form id="hero-form" class="relative max-w-2xl mx-auto mb-20">
+                <div class="flex flex-col sm:flex-row p-2 rounded-2xl bg-slate-900 border border-slate-800 shadow-3xl">
+                    <div class="flex-1 flex items-center px-4 py-3">
+                        <i data-lucide="search" class="w-5 h-5 text-slate-500 mr-3"></i>
+                        <input type="url" required placeholder="https://yourwebsite.com" class="bg-transparent border-none outline-none w-full text-white text-lg">
+                    </div>
+                    <button type="submit" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2">
+                        Analyze Now
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div id="validation-msg" class="absolute left-6 -bottom-8 text-sm font-medium hidden"></div>
+            </form>
+
+            <div class="animate-float opacity-80 max-w-6xl mx-auto rounded-[2rem] overflow-hidden border border-slate-800 shadow-2xl">
+                <img src="../redesign/hero-dashboard.png" alt="Dashboard Preview" class="w-full h-auto">
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section id="features" class="py-32 bg-slate-950">
+        <div class="max-w-7xl mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-black mb-20">Everything you need <br>to <span class="text-cyan-400">scale high.</span></h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="feature-card p-10 rounded-3xl bg-slate-900 border border-slate-800/50">
+                    <div class="w-14 h-14 bg-cyan-500/20 rounded-2xl flex items-center justify-center mb-6">
+                        <i data-lucide="smartphone" class="w-7 h-7 text-cyan-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4">Mobile-First Audit</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">Real device emulation for tap-targets, responsiveness, and viewport optimization from the start.</p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="feature-card p-10 rounded-3xl bg-slate-900 border border-slate-800/50">
+                    <div class="w-14 h-14 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-6">
+                        <i data-lucide="target" class="w-7 h-7 text-blue-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4">Lead-Gen Score</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">Deterministic scoring for CTAs, form accessibility, and multi-step conversion clarity.</p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="feature-card p-10 rounded-3xl bg-slate-900 border border-slate-800/50">
+                    <div class="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center mb-6">
+                        <i data-lucide="sparkles" class="w-7 h-7 text-purple-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4">Gemini Insights</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">Contextual AI analysis that turns dry metrics into actionable business wins prioritized by ROI.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ROI Section -->
+    <section id="roi" class="py-32 bg-slate-900 border-y border-slate-800">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-20">
+            <div class="flex-1">
+                <h2 class="text-4xl font-extrabold mb-8">From Technical Docs to <br> <span class="text-cyan-400">Business Revenue.</span></h2>
+                <p class="text-slate-400 text-lg mb-10">We don't just find bugs; we find opportunities. SiteBlitz computes the projected ROI of every fix so you know what to prioritize.</p>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3 text-white font-semibold">
+                        <i data-lucide="check-circle" class="w-6 h-6 text-emerald-400"></i>
+                        Automated Score Gap Analysis
+                    </div>
+                    <div class="flex items-center gap-3 text-white font-semibold">
+                        <i data-lucide="check-circle" class="w-6 h-6 text-emerald-400"></i>
+                        Industry Benchmarking Context
+                    </div>
+                    <div class="flex items-center gap-3 text-white font-semibold">
+                        <i data-lucide="check-circle" class="w-6 h-6 text-emerald-400"></i>
+                        Priority Roadmap Generation
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 w-full max-w-md p-8 rounded-[2rem] bg-slate-800 border-2 border-slate-700 shadow-3xl">
+                <div class="flex items-center justify-between mb-8">
+                    <h4 class="font-bold text-lg">Projected Improvements</h4>
+                    <span class="text-cyan-400 font-mono text-xs">+18.5% Conversion</span>
+                </div>
+                <div class="space-y-6">
+                    <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                        <div class="h-full bg-cyan-500" style="width: 75%"></div>
+                    </div>
+                    <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                        <div class="h-full bg-blue-500" style="width: 40%"></div>
+                    </div>
+                    <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                        <div class="h-full bg-emerald-500" style="width: 92%"></div>
+                    </div>
+                </div>
+                <div class="mt-8 pt-8 border-t border-slate-700 text-slate-400 text-sm italic">
+                    "Fixing the 'Contact Us' button contrast will directly improve conversion rates."
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-20 bg-slate-950 text-center px-6">
+        <div class="max-w-2xl mx-auto">
+            <h2 class="text-3xl font-black mb-8">Ready to Blitz your site?</h2>
+            <button class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-12 py-4 rounded-full text-lg shadow-xl mb-12">
+                Get Started for Free
+            </button>
+            <div class="flex items-center justify-center gap-8 text-slate-500 text-sm">
+                <a href="#">Privacy</a>
+                <a href="#">Terms</a>
+                <a href="#">Security</a>
+            </div>
+            <div class="mt-8 text-slate-600">
+                © 2026 SiteBlitz Technologies Inc.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Init Lucide Icons
+        lucide.createIcons();
+
+        // Simple Form Interactivity
+        const form = document.getElementById('hero-form');
+        const validation = document.getElementById('validation-msg');
+        
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const urlInput = form.querySelector('input').value;
+            console.log("Analyzing:", urlInput);
+            validation.textContent = "Launching scan engine...";
+            validation.classList.remove('hidden', 'text-red-400');
+            validation.classList.add('text-emerald-400');
+            
+            // In a real embed, this would redirect or call an API
+            setTimeout(() => {
+                alert("Redesign Preview: Scan initialized for " + urlInput);
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

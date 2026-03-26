@@ -1,24 +1,12 @@
-import { sql } from "@vercel/postgres";
-import type { BenchmarkSite, IndustryCategory, LiveAuditHistory } from "./audit-types";
-
-function hasPostgresConnection(): boolean {
-  return Boolean(
-    process.env.POSTGRES_URL ||
-      process.env.POSTGRES_PRISMA_URL ||
-      process.env.POSTGRES_URL_NON_POOLING
-  );
-}
-
-export function isLiveDatabaseEnabled(): boolean {
-  return hasPostgresConnection();
-}
+import { pgPool } from "./postgres";
+import type { LiveAuditHistory } from "./audit-types";
 
 export async function initLiveSchema() {
-  if (!hasPostgresConnection()) return;
-  await sql`
+  await pgPool.query(`
     CREATE TABLE IF NOT EXISTS siteblitz_audits (
       id TEXT PRIMARY KEY,
       url TEXT NOT NULL,
+      user_id TEXT,
       industry TEXT NOT NULL,
       scores JSONB NOT NULL,
       issues JSONB NOT NULL,
@@ -30,12 +18,13 @@ export async function initLiveSchema() {
       status TEXT NOT NULL,
       timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
-  `;
+  `);
 }
 
 export async function saveLiveAudit(report: {
   id: string;
   url: string;
+  user_id?: string;
   industry: string;
   scores: unknown;
   issues: unknown;
@@ -46,37 +35,46 @@ export async function saveLiveAudit(report: {
   pipeline: unknown;
   status: string;
 }) {
-  if (!hasPostgresConnection()) return;
   await initLiveSchema();
-  await sql`
-    INSERT INTO siteblitz_audits (id, url, industry, scores, issues, recommendations, competitors, analytics, roi, pipeline, status, timestamp)
+  await pgPool.query(
+    `
+    INSERT INTO siteblitz_audits (id, url, user_id, industry, scores, issues, recommendations, competitors, analytics, roi, pipeline, status, timestamp)
     VALUES (
-      ${report.id},
-      ${report.url},
-      ${report.industry},
-      ${JSON.stringify(report.scores)}::jsonb,
-      ${JSON.stringify(report.issues)}::jsonb,
-      ${JSON.stringify(report.recommendations)}::jsonb,
-      ${JSON.stringify(report.competitors)}::jsonb,
-      ${JSON.stringify(report.analytics)}::jsonb,
-      ${JSON.stringify(report.roi)}::jsonb,
-      ${JSON.stringify(report.pipeline)}::jsonb,
-      ${report.status},
-      NOW()
+      $1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11, $12, NOW()
     )
-  `;
+  `,
+    [
+      report.id,
+      report.url,
+      report.user_id || null,
+      report.industry,
+      JSON.stringify(report.scores),
+      JSON.stringify(report.issues),
+      JSON.stringify(report.recommendations),
+      JSON.stringify(report.competitors),
+      JSON.stringify(report.analytics),
+      JSON.stringify(report.roi),
+      JSON.stringify(report.pipeline),
+      report.status,
+    ],
+  );
 }
 
-export async function getLiveAuditHistory(url: string, limit = 10): Promise<LiveAuditHistory[]> {
-  if (!hasPostgresConnection()) return [];
+export async function getLiveAuditHistory(
+  url: string,
+  limit = 10,
+): Promise<LiveAuditHistory[]> {
   await initLiveSchema();
-  const result = await sql`
+  const result = await pgPool.query(
+    `
     SELECT id, url, scores, timestamp
     FROM siteblitz_audits
-    WHERE url = ${url}
+    WHERE url = $1
     ORDER BY timestamp DESC
-    LIMIT ${limit}
-  `;
+    LIMIT $2
+  `,
+    [url, limit],
+  );
 
   return result.rows.map((row) => ({
     id: String(row.id),
@@ -86,54 +84,47 @@ export async function getLiveAuditHistory(url: string, limit = 10): Promise<Live
   }));
 }
 
-export async function getRecentIndustryBenchmarks(
-  industry: IndustryCategory,
-  limit = 24
-): Promise<BenchmarkSite[]> {
-  if (!hasPostgresConnection()) return [];
+export async function getRecentLiveAudits(
+  limit = 20,
+): Promise<LiveAuditHistory[]> {
   await initLiveSchema();
-  const result = await sql`
-    SELECT url, scores, timestamp
+  const result = await pgPool.query(
+    `
+    SELECT id, url, scores, timestamp
     FROM siteblitz_audits
-    WHERE industry = ${industry}
-      AND status = 'live-complete'
     ORDER BY timestamp DESC
-    LIMIT ${limit}
-  `;
+    LIMIT $1
+  `,
+    [limit],
+  );
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    url: String(row.url),
+    scores: row.scores as LiveAuditHistory["scores"],
+    timestamp: new Date(row.timestamp as string).toISOString(),
+  }));
+}
 
-  const deduped = new Map<string, BenchmarkSite>();
+export async function getUserAuditHistory(
+  userId: string,
+  limit = 20,
+): Promise<LiveAuditHistory[]> {
+  await initLiveSchema();
+  const result = await pgPool.query(
+    `
+    SELECT id, url, scores, timestamp
+    FROM siteblitz_audits
+    WHERE user_id = $1
+    ORDER BY timestamp DESC
+    LIMIT $2
+  `,
+    [userId, limit],
+  );
 
-  for (const row of result.rows) {
-    const rawUrl = String(row.url || "");
-    if (!rawUrl) continue;
-
-    let hostname = "";
-    try {
-      hostname = new URL(rawUrl).hostname.replace(/^www\./i, "").toLowerCase();
-    } catch {
-      continue;
-    }
-    if (!hostname || deduped.has(hostname)) continue;
-
-    const scores = (row.scores || {}) as Record<string, unknown>;
-    const overall = Number(scores.overall ?? 0);
-    const mobile = Number(scores.mobile ?? 0);
-    const seo = Number(scores.seo ?? 0);
-
-    if (!Number.isFinite(overall) || overall <= 0) continue;
-
-    const iso = new Date(String(row.timestamp)).toISOString();
-    deduped.set(hostname, {
-      name: hostname.split(".")[0] || hostname,
-      url: rawUrl,
-      overall: Math.round(overall),
-      mobile: Number.isFinite(mobile) ? Math.round(mobile) : 0,
-      seo: Number.isFinite(seo) ? Math.round(seo) : 0,
-      auditedDate: iso.split("T")[0],
-      sourceType: "live",
-      lastUpdated: iso,
-    });
-  }
-
-  return [...deduped.values()];
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    url: String(row.url),
+    scores: row.scores as LiveAuditHistory["scores"],
+    timestamp: new Date(row.timestamp as string).toISOString(),
+  }));
 }

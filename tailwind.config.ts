@@ -15,40 +15,49 @@ const config: Config = {
         card: "var(--card)",
         "card-foreground": "var(--card-foreground)",
         primary: {
-          DEFAULT: "var(--primary)",
-          foreground: "var(--primary-foreground)",
+          DEFAULT: "#2dd4bf", // Teal-400
+          foreground: "#020617",
         },
         secondary: {
-          DEFAULT: "var(--secondary)",
-          foreground: "var(--secondary-foreground)",
+          DEFAULT: "#1e293b", // Slate-800
+          foreground: "#f8fafc",
+        },
+        accent: {
+          DEFAULT: "#3b82f6", // Blue-500
+          foreground: "#ffffff",
         },
         muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
+          DEFAULT: "rgba(15, 23, 42, 0.5)",
+          foreground: "#94a3b8",
         },
         destructive: {
-          DEFAULT: "var(--destructive)",
-          foreground: "var(--destructive-foreground)",
+          DEFAULT: "#f43f5e",
+          foreground: "#ffffff",
         },
         success: {
-          DEFAULT: "var(--success)",
-          foreground: "var(--success-foreground)",
+          DEFAULT: "#10b981",
+          foreground: "#ffffff",
         },
         warning: {
-          DEFAULT: "var(--warning)",
-          foreground: "var(--warning-foreground)",
+          DEFAULT: "#f59e0b",
+          foreground: "#ffffff",
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        xl: "1rem",
+        "2xl": "1.5rem",
+        "3xl": "2rem",
+      },
+      boxShadow: {
+        "3xl": "0 35px 60px -15px rgba(0, 0, 0, 0.3)",
+        "glow-cyan": "0 0 20px -5px rgba(34, 211, 238, 0.3)",
       },
       animation: {
         "spin-slow": "spin 3s linear infinite",
         "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "scanner": "scanner 2s ease-in-out infinite",
-        "float": "float 3s ease-in-out infinite",
+        "float": "float 6s ease-in-out infinite",
+        "shimmer": "shimmer 2.5s linear infinite",
       },
       keyframes: {
         scanner: {
@@ -57,7 +66,10 @@ const config: Config = {
         },
         float: {
           "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-10px)" },
+          "50%": { transform: "translateY(-15px)" },
+        },
+        shimmer: {
+          "100%": { transform: "translateX(100%)" },
         },
       },
     },

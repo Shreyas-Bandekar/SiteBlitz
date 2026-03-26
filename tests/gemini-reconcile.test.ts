@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getGeminiInsights } from "../lib/gemini-insights";
+import { getGroqInsights } from "../lib/groq-insights";
 
 test("Contact-form reconciliation blocks contradictory add-form claim", async () => {
-  const oldGroqKey = process.env.GROQ_API_KEY;
+  const oldKey = process.env.GROQ_API_KEY;
   delete process.env.GROQ_API_KEY;
   try {
-    const out = await getGeminiInsights(
+    const out = await getGroqInsights(
       {
         issues: [],
         leadGenAnalysis: {
@@ -21,6 +21,6 @@ test("Contact-form reconciliation blocks contradictory add-form claim", async ()
     assert.equal(out.sourceMode, "fallback");
     assert.ok(!out.summary.toLowerCase().includes("no contact form"));
   } finally {
-    if (oldGroqKey) process.env.GROQ_API_KEY = oldGroqKey;
+    if (oldKey) process.env.GROQ_API_KEY = oldKey;
   }
 });

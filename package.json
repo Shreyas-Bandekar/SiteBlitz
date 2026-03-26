@@ -17,16 +17,20 @@
     "@types/seedrandom": "^3.0.8",
     "@vercel/postgres": "^0.10.0",
     "ai": "^6.0.134",
+    "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "chrome-launcher": "latest",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "html-to-pdfmake": "latest",
+    "jose": "^6.2.2",
+    "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
     "lighthouse": "latest",
     "lucide-react": "^0.577.0",
     "next": "latest",
     "pdfmake": "latest",
+    "pg": "^8.20.0",
     "playwright": "latest",
     "puppeteer": "^24.40.0",
     "react": "latest",
@@ -37,13 +41,16 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "latest",
+    "@types/pg": "^8.20.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",
     "postcss": "latest",
     "tailwindcss": "^3.4.17",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.1.1"
   }
 }

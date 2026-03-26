@@ -1,0 +1,68 @@
+[
+  {
+    "name": "savethechildren",
+    "url": "https://www.savethechildren.org",
+    "overall": 80,
+    "mobile": 78,
+    "seo": 83,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "London",
+    "country": "United Kingdom",
+    "lastUpdated": "2026-03-26T06:55:33.358Z"
+  },
+  {
+    "name": "cry",
+    "url": "https://www.cry.org",
+    "overall": 79,
+    "mobile": 77,
+    "seo": 81,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "Mumbai",
+    "district": "Mumbai Suburban",
+    "state": "Maharashtra",
+    "country": "India",
+    "lastUpdated": "2026-03-26T06:55:33.358Z"
+  },
+  {
+    "name": "giveindia",
+    "url": "https://www.giveindia.org",
+    "overall": 71,
+    "mobile": 63,
+    "seo": 88,
+    "auditedDate": "2026-03-26",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-26T06:55:43.892Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  },
+  {
+    "name": "unicef",
+    "url": "https://www.unicef.org",
+    "overall": 45,
+    "mobile": 23,
+    "seo": 60,
+    "auditedDate": "2026-03-26",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-26T06:55:38.301Z",
+    "city": "New York",
+    "state": "New York",
+    "country": "United States"
+  },
+  {
+    "name": "worldwildlife",
+    "url": "https://www.worldwildlife.org",
+    "overall": 45,
+    "mobile": 23,
+    "seo": 60,
+    "auditedDate": "2026-03-26",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-26T06:55:41.778Z",
+    "city": "Washington",
+    "state": "District Of Columbia",
+    "country": "United States"
+  }
+]
