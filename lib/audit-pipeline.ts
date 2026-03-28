@@ -107,7 +107,7 @@ export function detectBlockedResponseFromHtml(html: string): boolean {
     (hasStatusErrorSignal || titleLooksBlocked)
   )
     return true;
-  if (shortResponse && signalCount >= 1 && hasStatusErrorSignal) return true;
+  if (shortResponse && signalCount >= 1 && hasStatusErrorSignal && (titleLooksBlocked || !titleText)) return true;
   return shortResponse && signalCount >= 3;
 }
 

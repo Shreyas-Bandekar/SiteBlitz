@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -12,19 +11,11 @@ import {
   ArrowRightLeft,
   Gauge,
   History,
-  ShieldCheck,
   Sparkles,
   ArrowUpRight,
 } from "lucide-react";
-import { getCurrentUser } from "../../../lib/auth/current-user";
 
-export default async function DashboardPage() {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
+export default function DashboardPage() {
   return (
     <main className="relative mx-auto w-full max-w-6xl px-4 py-12">
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -36,10 +27,10 @@ export default async function DashboardPage() {
       <section className="liquid-glass liquid-highlight relative overflow-hidden rounded-2xl p-8">
         <div className="relative animate-in fade-in slide-in-from-bottom-2 duration-500">
           <Badge className="mb-4 border border-emerald-300/20 bg-emerald-500/15 text-emerald-200">
-            Verified Account
+            AI Website Auditor
           </Badge>
           <h1 className="text-3xl font-black tracking-tight text-emerald-50 md:text-4xl">
-            Welcome back, {user.email}
+            Welcome to SiteBlitz
           </h1>
           <p className="mt-2 max-w-2xl text-emerald-100/70">
             Run audits, compare competitors, and review history from one
@@ -64,12 +55,6 @@ export default async function DashboardPage() {
               className="rounded-md border border-emerald-300/25 bg-black/40 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-700/20"
             >
               View Audit History
-            </Link>
-            <Link
-              href="/account"
-              className="rounded-md border border-emerald-300/25 bg-black/40 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-700/20"
-            >
-              Manage Account
             </Link>
           </div>
         </div>
@@ -117,48 +102,18 @@ export default async function DashboardPage() {
         <Card className="liquid-glass-soft animate-in fade-in slide-in-from-bottom-2 duration-1000">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg text-emerald-100">
-              <ShieldCheck className="h-5 w-5" /> Session
+              <History className="h-5 w-5" /> Audit History
             </CardTitle>
             <CardDescription className="text-emerald-100/65">
-              Authenticated and email-verified access is active.
+              Browse your previous audit results and track improvements.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-1 text-sm text-emerald-100/70">
-            <p>Email: {user.email}</p>
-            <p>Created: {new Date(user.createdAt).toLocaleString()}</p>
-            <p>Verified: Yes</p>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-8 grid gap-6 lg:grid-cols-1">
-        <Card className="liquid-glass-soft">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl text-emerald-100">
-              <History className="h-5 w-5" /> Account Actions
-            </CardTitle>
-            <CardDescription className="text-emerald-100/65">
-              Quick access to core account operations.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <Link
-              href="/account"
-              className="rounded-md border border-emerald-300/25 bg-black/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-800/20"
-            >
-              Open account
-            </Link>
+          <CardContent>
             <Link
               href="/audit?mode=history"
-              className="rounded-md border border-emerald-300/25 bg-black/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-800/20"
+              className="text-sm font-semibold text-emerald-300 underline"
             >
-              Open audit history
-            </Link>
-            <Link
-              href="/audit"
-              className="rounded-md border border-emerald-300/25 bg-black/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-800/20"
-            >
-              Go to audit workspace
+              View history
             </Link>
           </CardContent>
         </Card>

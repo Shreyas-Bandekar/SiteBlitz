@@ -386,56 +386,7 @@ export default function LiveAuditResults({
             </CardContent>
           </Card>
 
-          <Card className="liquid-glass-soft">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-emerald-100/75">
-                Pipeline Health
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {failedStages.length === 0 && pipelineWarnings.length === 0 ? (
-                <p className="text-sm text-emerald-100/70">
-                  All pipeline stages completed successfully.
-                </p>
-              ) : (
-                <>
-                  {pipelineWarnings.map((warning, idx) => (
-                    <div
-                      key={`pw-${idx}`}
-                      className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
-                    >
-                      {warning}
-                    </div>
-                  ))}
-                  {failedStages.map((s, idx) => (
-                    <div
-                      key={`fs-${idx}`}
-                      className="rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"
-                    >
-                      {s.stage}: {s.error || "failed"}
-                    </div>
-                  ))}
-                </>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card className="liquid-glass-soft">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-emerald-100/75">
-                Competitor Benchmarks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {report.competitors?.length ? (
-                <CompetitorLiveTable competitors={report.competitors} />
-              ) : (
-                <p className="text-sm text-foreground/60">
-                  No competitor benchmarks were available for this run.
-                </p>
-              )}
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader className="pb-3">

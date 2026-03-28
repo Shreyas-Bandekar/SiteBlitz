@@ -68,7 +68,7 @@ export function calculateTrustBreakdown(metas: TrustMeta[]): TrustBreakdown {
   const verified = Math.round(p(v) * 10) / 10;
   const estimated = Math.round(p(e) * 10) / 10;
   const inferred = Math.round(p(i) * 10) / 10;
-  const fallback = Math.round((100 - verified - estimated - inferred) * 10) / 10;
+  const fallback = Math.max(0, Math.round((100 - verified - estimated - inferred) * 10) / 10);
   return { verified, estimated, inferred, fallback };
 }
 

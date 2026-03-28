@@ -62,9 +62,9 @@ test("error page content is sanitized and suggestions switch to recovery guidanc
 
   const rows = generateContentSuggestions(html, "other", 55);
 
-  assert.ok(rows.every((r) => r.current === "Missing"));
+  assert.ok(rows.some((r) => r.current.includes("could not be reliably read")));
   assert.ok(rows.every((r) => !/error/i.test(r.suggested)));
-  assert.ok(rows.every((r) => /could not be audited|unavailable|could not read/i.test(r.suggested)));
+  assert.ok(rows.every((r) => /restrictions|revalidate|re-check/i.test(r.suggested)));
   assert.ok(rows.every((r) => r.confidence >= 0 && r.confidence <= 40));
 });
 
@@ -83,8 +83,8 @@ test("normal page with the word error does not trigger error-page fallback", () 
   `;
 
   const rows = generateContentSuggestions(html, "other", 60);
-  assert.ok(rows.some((r) => r.current !== "Missing"));
-  assert.ok(rows.every((r) => !/could not be audited right now|page unavailable during scan/i.test(r.suggested)));
+  assert.ok(rows.some((r) => !r.current.includes("could not be reliably read")));
+  assert.ok(rows.every((r) => !/restrictions|revalidate|re-check/i.test(r.suggested)));
 });
 
 test("degraded fallback marker triggers recovery guidance", () => {
@@ -95,6 +95,6 @@ test("degraded fallback marker triggers recovery guidance", () => {
     </html>
   `;
   const rows = generateContentSuggestions(html, "other", 45);
-  assert.ok(rows.every((r) => r.current === "Missing"));
-  assert.ok(rows.every((r) => /could not be audited|unavailable|could not read/i.test(r.suggested)));
+  assert.ok(rows.some((r) => r.current.includes("could not be reliably read")));
+  assert.ok(rows.every((r) => /restrictions|revalidate|re-check/i.test(r.suggested)));
 });

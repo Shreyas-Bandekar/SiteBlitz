@@ -10,7 +10,7 @@
     "city": "San Francisco",
     "state": "California",
     "country": "United States",
-    "lastUpdated": "2026-03-25T10:25:25.152Z"
+    "lastUpdated": "2026-03-28T06:08:44.501Z"
   },
   {
     "name": "shopify",
@@ -18,9 +18,9 @@
     "overall": 85,
     "mobile": 80,
     "seo": 100,
-    "auditedDate": "2026-03-25",
+    "auditedDate": "2026-03-28",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T10:25:57.233Z",
+    "lastUpdated": "2026-03-28T06:08:54.137Z",
     "city": "Ottawa",
     "state": "Ontario",
     "country": "Canada"
@@ -31,9 +31,9 @@
     "overall": 85,
     "mobile": 80,
     "seo": 80,
-    "auditedDate": "2026-03-25",
+    "auditedDate": "2026-03-28",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T10:26:29.118Z",
+    "lastUpdated": "2026-03-28T06:09:01.362Z",
     "city": "Bengaluru",
     "district": "Bangalore Urban",
     "state": "Karnataka",
@@ -45,13 +45,27 @@
     "overall": 85,
     "mobile": 80,
     "seo": 100,
-    "auditedDate": "2026-03-25",
+    "auditedDate": "2026-03-28",
     "sourceType": "live",
-    "lastUpdated": "2026-03-25T10:26:59.737Z",
+    "lastUpdated": "2026-03-28T06:09:09.145Z",
     "city": "Bengaluru",
     "district": "Bangalore Urban",
     "state": "Karnataka",
     "country": "India"
+  },
+  {
+    "name": "nykaa",
+    "url": "https://www.nykaa.com",
+    "overall": 85,
+    "mobile": 83,
+    "seo": 86,
+    "auditedDate": "2026-03-20",
+    "sourceType": "pre-audited",
+    "city": "Mumbai",
+    "district": "Mumbai City",
+    "state": "Maharashtra",
+    "country": "India",
+    "lastUpdated": "2026-03-28T06:08:44.501Z"
   },
   {
     "name": "bigcommerce",
@@ -64,6 +78,6 @@
     "city": "Austin",
     "state": "Texas",
     "country": "United States",
-    "lastUpdated": "2026-03-25T10:25:25.152Z"
+    "lastUpdated": "2026-03-28T06:08:44.501Z"
   }
 ]

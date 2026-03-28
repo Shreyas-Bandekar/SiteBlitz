@@ -13,11 +13,10 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
-  Database,
+
   Eye,
   Gauge,
   History as HistoryIcon,
-  Lock,
   ScanLine,
   ShieldCheck,
   Sparkles,
@@ -77,22 +76,11 @@ export default function MarketingPage() {
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href="/login"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                href="/audit"
+                className="inline-flex h-10 items-center justify-center rounded-md bg-emerald-400 px-8 text-sm font-medium text-black shadow-sm transition-colors hover:bg-emerald-300"
               >
-                Sign In to Start
+                Start Auditing Now
               </Link>
-              <Link
-                href="/signup"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-secondary px-8 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
-              >
-                Create Account
-              </Link>
-            </div>
-
-            <div className="mt-6 inline-flex items-center rounded-xl border border-emerald-300/20 bg-black/40 px-4 py-2 text-sm text-emerald-100/80">
-              <Lock className="mr-2 h-4 w-4 text-emerald-300" />
-              Audits are protected and available after login.
             </div>
           </div>
 
@@ -217,9 +205,9 @@ export default function MarketingPage() {
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
             {[
               {
-                icon: Lock,
-                title: "1. Sign In",
-                text: "Authenticate to access protected audit tools and data.",
+                icon: Gauge,
+                title: "1. Enter URL",
+                text: "Paste any website URL to begin a comprehensive audit.",
               },
               {
                 icon: Gauge,
@@ -335,7 +323,7 @@ export default function MarketingPage() {
                 <p>• Basic competitor compare</p>
                 <p>• 7-day history</p>
                 <Link
-                  href="/signup"
+                  href="/audit"
                   className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                 >
                   Start Free
@@ -364,7 +352,7 @@ export default function MarketingPage() {
                 <p>• Advanced AI insights</p>
                 <p>• Extended history and exports</p>
                 <Link
-                  href="/signup"
+                  href="/audit"
                   className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
                 >
                   Upgrade to Pro
@@ -417,7 +405,7 @@ export default function MarketingPage() {
             {[
               {
                 q: "Do I need to log in before running audits?",
-                a: "Yes. Audit, compare, and history features are available only after authentication.",
+                a: "No. All audit features are available without any login. Just enter a URL and start.",
               },
               {
                 q: "Can I compare my site with a competitor?",
@@ -448,16 +436,10 @@ export default function MarketingPage() {
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-3">
               <Link
-                href="/login"
-                className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                href="/audit"
+                className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-8 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
               >
-                Sign In
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex h-9 items-center justify-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
-              >
-                Create Account
+                Start Auditing
               </Link>
             </div>
           </div>

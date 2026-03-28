@@ -1,0 +1,44 @@
+[
+  {
+    "name": "urbancompany",
+    "url": "https://www.urbancompany.com",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 100,
+    "auditedDate": "2026-03-26",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-26T15:07:53.869Z",
+    "city": "Gurugram",
+    "district": "Gurgaon",
+    "state": "Haryana",
+    "country": "India"
+  },
+  {
+    "name": "nobroker",
+    "url": "https://www.nobroker.in",
+    "overall": 85,
+    "mobile": 80,
+    "seo": 88,
+    "auditedDate": "2026-03-26",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-26T15:07:57.436Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  },
+  {
+    "name": "housejoy",
+    "url": "https://www.housejoy.in",
+    "overall": 45,
+    "mobile": 23,
+    "seo": 60,
+    "auditedDate": "2026-03-26",
+    "sourceType": "live",
+    "lastUpdated": "2026-03-26T15:07:58.526Z",
+    "city": "Bengaluru",
+    "district": "Bangalore Urban",
+    "state": "Karnataka",
+    "country": "India"
+  }
+]

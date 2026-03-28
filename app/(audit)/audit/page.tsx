@@ -71,6 +71,7 @@ export default function AuditPage() {
       autoStartedRef.current = true;
       void runLiveAudit(source);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

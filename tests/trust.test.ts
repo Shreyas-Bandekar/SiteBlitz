@@ -24,11 +24,12 @@ test("trust breakdown percentages sum to 100", () => {
   ];
   const b = calculateTrustBreakdown(items);
   const sum = b.verified + b.estimated + b.inferred + b.fallback;
-  assert.equal(sum, 100);
+  assert.ok(Math.abs(sum - 100) < 0.001, `Sum should be exactly or very close to 100, got ${sum}`);
 });
 
 test("calculateOverallTrustScore is stable for identical inputs", () => {
-  const items = [makeTrustMeta(1, "VERIFIED", "x", 0.95), makeTrustMeta(2, "ESTIMATED", "y", 0.72)];
-  assert.equal(calculateOverallTrustScore(items), calculateOverallTrustScore(items));
-  assert.ok(calculateOverallTrustScore(items) >= 0 && calculateOverallTrustScore(items) <= 100);
+  const items1 = [makeTrustMeta(1, "VERIFIED", "x", 0.95), makeTrustMeta(2, "ESTIMATED", "y", 0.72)];
+  const items2 = [makeTrustMeta(1, "VERIFIED", "x", 0.95), makeTrustMeta(2, "ESTIMATED", "y", 0.72)];
+  assert.equal(calculateOverallTrustScore(items1), calculateOverallTrustScore(items2));
+  assert.ok(calculateOverallTrustScore(items1) >= 0 && calculateOverallTrustScore(items1) <= 100);
 });

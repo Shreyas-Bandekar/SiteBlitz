@@ -1,0 +1,50 @@
+
+> ai-website-auditor@1.0.0 build
+> next build
+
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /home/nikhil/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /home/nikhil/Project/SiteBlitz/package-lock.json
+
+▲ Next.js 16.2.1 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 17.1s
+  Running TypeScript ...
+  Finished TypeScript in 8.6s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/19) ...
+  Generating static pages using 11 workers (4/19) 
+  Generating static pages using 11 workers (9/19) 
+  Generating static pages using 11 workers (14/19) 
+✓ Generating static pages using 11 workers (19/19) in 1880ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /account
+├ ○ /account/history
+├ ƒ /api/account/history
+├ ƒ /api/ai-insights
+├ ƒ /api/audit
+├ ƒ /api/audit/history
+├ ƒ /api/auth/login
+├ ƒ /api/auth/logout
+├ ƒ /api/auth/me
+├ ƒ /api/auth/signup
+├ ƒ /api/competitor-analysis
+├ ƒ /api/mockup
+├ ○ /audit
+├ ○ /dashboard
+├ ○ /login
+└ ○ /signup
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

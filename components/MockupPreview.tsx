@@ -35,7 +35,7 @@ export default function MockupPreview({
               AI-Enhanced Preview <Badge variant="outline" className="text-xs border-indigo-500/30 text-indigo-300">Generative Layout</Badge>
             </CardTitle>
             <CardDescription className="text-indigo-200/70 block mt-1">
-              A high-converting SaaS landing page generated dynamically from your website's context.
+              A high-converting SaaS landing page generated dynamically from your website&apos;s context.
             </CardDescription>
           </div>
           

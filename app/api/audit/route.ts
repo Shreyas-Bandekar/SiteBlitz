@@ -1,5 +1,4 @@
 import { runAuditPipeline } from "../../../lib/audit-pipeline";
-import { getSessionFromCookies } from "../../../lib/auth/session";
 import { getGroqInsights } from "../../../lib/groq-insights";
 import { generateRoadmap } from "../../../lib/manual-roadmap";
 import { calculateTrust } from "../../../lib/trust-calculator";
@@ -29,8 +28,7 @@ export async function POST(req: Request) {
   const nowIso = new Date().toISOString();
   let auditId: string = crypto.randomUUID();
   const stageTrace: StageTraceEntry[] = [];
-  const session = await getSessionFromCookies().catch(() => null);
-  const userId = session?.sub;
+  const userId = "anonymous";
   try {
     const { url, enrichCompetitors, enrichAi, strictDb } = await req.json();
     const flags = resolveEnrichmentFlags({
